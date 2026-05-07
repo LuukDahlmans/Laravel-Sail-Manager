@@ -11,3 +11,7 @@ vite.config.ts.timestamp-*
 
 # Local-only architecture / development notes (not for the public repo)
 CLAUDE.md
+
+# Editor / IDE config (personal, not for the public repo)
+.vscode/
+.idea/
