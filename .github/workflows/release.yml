@@ -22,6 +22,13 @@ jobs:
     runs-on: macos-latest
     timeout-minutes: 45
 
+    # softprops/action-gh-release needs write access to releases. With
+    # restrictive default workflow permissions on the repo, the implicit
+    # GITHUB_TOKEN otherwise gets read-only and the action fails with
+    # "Resource not accessible by integration".
+    permissions:
+      contents: write
+
     steps:
       - uses: actions/checkout@v4
 
@@ -63,6 +70,8 @@ jobs:
         with:
           draft: true
           generate_release_notes: true
+          # The .app.tar.gz updater bundle is only produced when the Tauri
+          # updater signing key is configured. Add it back to the glob list
+          # once signing is wired up — until then, ship the DMG only.
           files: |
             src-tauri/target/universal-apple-darwin/release/bundle/dmg/*.dmg
-            src-tauri/target/universal-apple-darwin/release/bundle/macos/*.app.tar.gz
