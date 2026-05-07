@@ -1,20 +1,31 @@
 name: Release
 
+# Triggers:
+#   - push to main: continuous prerelease, auto-versioned per commit. Skips
+#     docs / website / template-only changes so we don't burn macOS runner
+#     minutes on commits that can't have changed the binary.
+#   - push of a v* tag: draft release for curated, manually-published versions.
+#   - manual dispatch from the Actions tab.
 on:
   push:
+    branches: [main]
+    paths-ignore:
+      - '**.md'
+      - 'website/**'
+      - 'docs/**'
+      - 'static/**'
+      - '.github/ISSUE_TEMPLATE/**'
+      - '.github/PULL_REQUEST_TEMPLATE.md'
+      - '.github/workflows/website.yml'
     tags:
       - 'v*'
+  workflow_dispatch:
 
-# Builds the macOS bundle and publishes a draft GitHub Release with the DMG +
-# .app.tar.gz attached. Code-signing and notarization are intentionally not
-# wired up here — they need an Apple Developer ID and secrets the maintainer
-# must add. Until those secrets exist, downloaded DMGs are unsigned and will
-# trigger Gatekeeper warnings on first launch.
-#
-# To enable signing later: add the four standard Tauri release secrets
-# (APPLE_CERTIFICATE, APPLE_CERTIFICATE_PASSWORD, APPLE_SIGNING_IDENTITY,
-# APPLE_ID, APPLE_ID_PASSWORD, APPLE_TEAM_ID) to the repo and uncomment the
-# corresponding env vars below.
+# A new push to main cancels any in-flight build for the same ref. Tag pushes
+# get their own concurrency group so they're never cancelled by a main push.
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   build:
@@ -22,15 +33,16 @@ jobs:
     runs-on: macos-latest
     timeout-minutes: 45
 
-    # softprops/action-gh-release needs write access to releases. With
-    # restrictive default workflow permissions on the repo, the implicit
-    # GITHUB_TOKEN otherwise gets read-only and the action fails with
-    # "Resource not accessible by integration".
+    # softprops/action-gh-release needs write access to releases.
     permissions:
       contents: write
 
     steps:
       - uses: actions/checkout@v4
+        with:
+          # Full history needed so we can compute commit count for the
+          # synthetic prerelease tag.
+          fetch-depth: 0
 
       - name: Set up Node
         uses: actions/setup-node@v4
@@ -52,10 +64,40 @@ jobs:
             src-tauri/target
           key: ${{ runner.os }}-cargo-release-${{ hashFiles('src-tauri/Cargo.lock') }}
 
+      - name: Compute version + tag
+        id: version
+        run: |
+          PKG_VERSION=$(node -p "require('./package.json').version")
+          if [[ "${GITHUB_REF}" == refs/tags/* ]]; then
+            # Tag push: use the tag verbatim, draft release for review.
+            TAG="${GITHUB_REF#refs/tags/}"
+            DRAFT="true"
+            PRERELEASE="false"
+            NAME="Sail Manager ${TAG}"
+          else
+            # main push or manual dispatch: synthetic per-commit prerelease.
+            COMMIT_COUNT=$(git rev-list --count HEAD)
+            SHORT_SHA=$(git rev-parse --short HEAD)
+            TAG="v${PKG_VERSION}-build.${COMMIT_COUNT}.${SHORT_SHA}"
+            DRAFT="false"
+            PRERELEASE="true"
+            NAME="Sail Manager v${PKG_VERSION} (build ${COMMIT_COUNT})"
+          fi
+          {
+            echo "tag=${TAG}"
+            echo "name=${NAME}"
+            echo "draft=${DRAFT}"
+            echo "prerelease=${PRERELEASE}"
+          } >> "${GITHUB_OUTPUT}"
+          echo "Computed: tag=${TAG}, draft=${DRAFT}, prerelease=${PRERELEASE}"
+
       - name: Install npm deps
         run: npm ci
 
       - name: Build universal binary
+        # Code-signing + notarization env vars stay commented out until the
+        # Apple Developer Program enrollment is complete and the secrets are
+        # added to the repo. See RELEASE.md for the upgrade path.
         # env:
         #   APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
         #   APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
@@ -65,13 +107,16 @@ jobs:
         #   APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         run: npm run tauri build -- --target universal-apple-darwin
 
-      - name: Create draft release
+      - name: Publish release
         uses: softprops/action-gh-release@v2
         with:
-          draft: true
+          tag_name: ${{ steps.version.outputs.tag }}
+          name: ${{ steps.version.outputs.name }}
+          draft: ${{ steps.version.outputs.draft }}
+          prerelease: ${{ steps.version.outputs.prerelease }}
           generate_release_notes: true
-          # The .app.tar.gz updater bundle is only produced when the Tauri
-          # updater signing key is configured. Add it back to the glob list
-          # once signing is wired up — until then, ship the DMG only.
+          # The .app.tar.gz updater bundle only exists once the Tauri updater
+          # signing key is configured. Add it back to this glob list when
+          # signing is wired up. Until then, ship the DMG only.
           files: |
             src-tauri/target/universal-apple-darwin/release/bundle/dmg/*.dmg
