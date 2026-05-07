@@ -1,33 +1,47 @@
 version: 2
 updates:
+  # Bundle every Cargo update into a single monthly PR. Tauri / Tokio used to
+  # be in their own groups; collapsed because the volume wasn't worth the
+  # split for a solo maintainer.
   - package-ecosystem: cargo
     directory: /src-tauri
     schedule:
-      interval: weekly
-    open-pull-requests-limit: 10
+      interval: monthly
+    open-pull-requests-limit: 2
     groups:
-      tauri:
+      cargo-deps:
         patterns:
-          - tauri*
-      tokio:
-        patterns:
-          - tokio*
+          - "*"
 
+  # Root npm deps (SvelteKit + Tauri plugins). One PR per month.
   - package-ecosystem: npm
     directory: /
     schedule:
-      interval: weekly
-    open-pull-requests-limit: 10
+      interval: monthly
+    open-pull-requests-limit: 2
     groups:
-      tauri:
+      npm-deps:
         patterns:
-          - "@tauri-apps/*"
-      sveltekit:
-        patterns:
-          - "svelte"
-          - "@sveltejs/*"
+          - "*"
 
+  # Marketing site has its own package.json. Same deal: one PR per month.
+  - package-ecosystem: npm
+    directory: /website
+    schedule:
+      interval: monthly
+    open-pull-requests-limit: 2
+    groups:
+      website-deps:
+        patterns:
+          - "*"
+
+  # GitHub Actions: low churn, monthly is plenty.
   - package-ecosystem: github-actions
     directory: /
     schedule:
       interval: monthly
+    open-pull-requests-limit: 1
+    groups:
+      actions:
+        patterns:
+          - "*"
