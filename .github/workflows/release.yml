@@ -69,27 +69,64 @@ jobs:
         run: |
           PKG_VERSION=$(node -p "require('./package.json').version")
           if [[ "${GITHUB_REF}" == refs/tags/* ]]; then
-            # Tag push: use the tag verbatim, draft release for review.
+            # Tag push: use the tag verbatim. The maintainer is expected to
+            # have bumped package.json / tauri.conf.json / Cargo.toml in the
+            # commit being tagged, so we don't touch them here. Draft for
+            # review.
             TAG="${GITHUB_REF#refs/tags/}"
+            BUNDLE_VERSION="${TAG#v}"
             DRAFT="true"
             PRERELEASE="false"
             NAME="Sail Manager ${TAG}"
+            BUMP="false"
           else
-            # main push or manual dispatch: synthetic per-commit full release.
+            # main push or manual dispatch: clean semver per commit. Patch
+            # bumps with the total commit count, so tags like v0.1.42 are
+            # always strictly greater than v0.1.41 and look like first-class
+            # release versions to every consumer.
+            MAJOR_MINOR=$(echo "${PKG_VERSION}" | sed -E 's/^([0-9]+\.[0-9]+).*/\1/')
             COMMIT_COUNT=$(git rev-list --count HEAD)
-            SHORT_SHA=$(git rev-parse --short HEAD)
-            TAG="v${PKG_VERSION}-build.${COMMIT_COUNT}.${SHORT_SHA}"
+            BUNDLE_VERSION="${MAJOR_MINOR}.${COMMIT_COUNT}"
+            TAG="v${BUNDLE_VERSION}"
             DRAFT="false"
             PRERELEASE="false"
-            NAME="Sail Manager v${PKG_VERSION} (build ${COMMIT_COUNT})"
+            NAME="Sail Manager ${TAG}"
+            BUMP="true"
           fi
           {
             echo "tag=${TAG}"
+            echo "bundle_version=${BUNDLE_VERSION}"
             echo "name=${NAME}"
             echo "draft=${DRAFT}"
             echo "prerelease=${PRERELEASE}"
+            echo "bump=${BUMP}"
           } >> "${GITHUB_OUTPUT}"
-          echo "Computed: tag=${TAG}, draft=${DRAFT}, prerelease=${PRERELEASE}"
+          echo "Computed: tag=${TAG}, bundle_version=${BUNDLE_VERSION}, draft=${DRAFT}"
+
+      - name: Patch source version (main / dispatch only)
+        if: steps.version.outputs.bump == 'true'
+        env:
+          BUNDLE_VERSION: ${{ steps.version.outputs.bundle_version }}
+        run: |
+          # tauri.conf.json: this is what ends up in the .app's Info.plist and
+          # in the DMG filename, so it must match the Release tag.
+          node -e "
+            const fs = require('fs');
+            const p = 'src-tauri/tauri.conf.json';
+            const cfg = JSON.parse(fs.readFileSync(p, 'utf8'));
+            cfg.version = process.env.BUNDLE_VERSION;
+            fs.writeFileSync(p, JSON.stringify(cfg, null, 2) + '\n');
+          "
+          # package.json: Tauri's CLI cross-checks this against tauri.conf.json
+          # and Cargo.toml; if they diverge, the build fails.
+          npm version "${BUNDLE_VERSION}" --no-git-tag-version --allow-same-version
+          # Cargo.toml: only the [package] version is at column 0; dep
+          # versions are nested inside braces so they don't match this anchor.
+          sed -i.bak -E 's/^version = "[^"]*"/version = "'"${BUNDLE_VERSION}"'"/' src-tauri/Cargo.toml
+          rm src-tauri/Cargo.toml.bak
+          echo "Patched in-source version to ${BUNDLE_VERSION}"
+          grep -E '^"version"|^version = ' src-tauri/Cargo.toml package.json | head -5
+          node -p "require('./src-tauri/tauri.conf.json').version"
 
       - name: Install npm deps
         run: npm ci
