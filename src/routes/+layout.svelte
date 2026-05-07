@@ -81,35 +81,12 @@
       // it still fires once the user finishes onboarding without needing a
       // relaunch.
 
-      // Auto-update check (best-effort). The plugin reads the endpoint from
-      // tauri.conf.json. If the maintainer hasn't published a release yet the
-      // call will simply return null/error which we ignore silently.
-      try {
-        const { check } = await import('@tauri-apps/plugin-updater');
-        const update = await check();
-        if (update?.available) {
-          toast.show({
-            type: 'info',
-            title: `Update available — v${update.version}`,
-            message: update.body ?? 'A new version of Sail Manager is ready to install.',
-            duration: 0,
-            action: {
-              label: 'Install & restart',
-              handler: async () => {
-                try {
-                  await update.downloadAndInstall();
-                  const { relaunch } = await import('@tauri-apps/plugin-process');
-                  await relaunch();
-                } catch (e) {
-                  toast.error(`Update failed: ${e}`);
-                }
-              },
-            },
-          });
-        }
-      } catch {
-        // No release yet, no network, signature mismatch, etc. — silent.
-      }
+      // Read the bundled app version (for the sidebar pill) and check whether
+      // a newer release is available. Both write into projectStore so the
+      // sidebar can render them. Silent failures inside checkForUpdate handle
+      // "no release yet / no network / signature mismatch".
+      await projectStore.loadAppVersion();
+      projectStore.checkForUpdate();
     })();
 
     const unlistenPromise = listen<{ path: string }>('tray-navigate', (e) => {

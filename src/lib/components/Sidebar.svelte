@@ -137,6 +137,29 @@
       </button>
     {/if}
 
+    {#if projectStore.updateAvailable}
+      <button
+        class="update-banner"
+        onclick={() => projectStore.installUpdate()}
+        disabled={projectStore.updateInstalling}
+        title={projectStore.updateAvailable.body ?? 'A new version is ready to install.'}
+      >
+        {#if projectStore.updateInstalling}
+          <span class="mini-spinner"></span>
+          <div class="update-text">
+            <strong>Installing…</strong>
+            <span>v{projectStore.updateAvailable.version}</span>
+          </div>
+        {:else}
+          <span class="update-glyph" aria-hidden="true">↑</span>
+          <div class="update-text">
+            <strong>Update available</strong>
+            <span>v{projectStore.updateAvailable.version} · click to install</span>
+          </div>
+        {/if}
+      </button>
+    {/if}
+
     <div class="meta-footer">
       <div class="meta-links">
         <a class="repo-link" href={WEBSITE} onclick={openExternal(WEBSITE)}>
@@ -152,6 +175,11 @@
           GitHub
         </a>
       </div>
+      {#if projectStore.appVersion}
+        <span class="version" title="Sail Manager version">
+          v{projectStore.appVersion}
+        </span>
+      {/if}
       <p class="disclaimer">
         Community project · Not affiliated with the Laravel project. Laravel and Laravel Sail are
         trademarks of Taylor Otwell.
@@ -417,5 +445,85 @@
   }
   @keyframes spin {
     to { transform: rotate(360deg); }
+  }
+
+  /* Update banner — appears between Docker stats and the meta footer when
+     the updater plugin reports a newer release. Click to install + relaunch. */
+  .update-banner {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    width: 100%;
+    padding: 8px 10px;
+    margin-top: 6px;
+    border-radius: 8px;
+    background: var(--accent-soft);
+    color: var(--accent);
+    border: 1px solid color-mix(in oklab, var(--accent), transparent 65%);
+    text-align: left;
+    cursor: pointer;
+    font-family: inherit;
+    transition: background 0.15s var(--ease-quick), transform 0.08s var(--ease-quick);
+    box-shadow: 0 0 0 1px rgba(255, 58, 46, 0.04);
+  }
+  .update-banner:hover:not(:disabled) {
+    background: color-mix(in oklab, var(--accent-soft), var(--accent) 18%);
+  }
+  .update-banner:disabled {
+    cursor: progress;
+    opacity: 0.85;
+  }
+  .update-glyph {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    background: var(--accent);
+    color: white;
+    font-size: 11px;
+    font-weight: 700;
+    flex-shrink: 0;
+    box-shadow: 0 0 0 3px var(--accent-soft);
+    /* Subtle pulse to draw the eye without being annoying. */
+    animation: pulse-up 2s ease-in-out infinite;
+  }
+  @keyframes pulse-up {
+    0%, 100% { transform: translateY(0); }
+    50%      { transform: translateY(-1.5px); }
+  }
+  .update-text {
+    display: flex;
+    flex-direction: column;
+    line-height: 1.25;
+    min-width: 0;
+  }
+  .update-text strong {
+    font-size: 11.5px;
+    font-weight: 650;
+    color: var(--accent);
+    letter-spacing: -0.005em;
+  }
+  .update-text span {
+    font-size: 10px;
+    color: color-mix(in oklab, var(--accent), var(--text) 30%);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  /* Version pill, sits next to the GitHub/Docs/Website links in the footer. */
+  .version {
+    display: inline-block;
+    margin-top: 6px;
+    padding: 2px 7px;
+    font-family: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, monospace;
+    font-size: 10px;
+    color: var(--text-faint);
+    background: var(--bg-3);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    align-self: flex-start;
   }
 </style>

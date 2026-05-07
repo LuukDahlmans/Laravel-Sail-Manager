@@ -113,6 +113,20 @@ class ProjectStore {
   liveStats = $state<Record<string, ProjectStatsSummary>>({});
   /** Daemon-wide stats — drives the system panel at the top of the list. */
   dockerSystem = $state<DockerSystemInfo | null>(null);
+  /** App version, read from tauri.conf.json once at boot. Shown in the sidebar. */
+  appVersion = $state<string | null>(null);
+  /**
+   * Pending update from `tauri-plugin-updater`. `null` means "checked, none
+   * available" or "haven't checked yet". The full update object is held so
+   * we can call `downloadAndInstall()` from a UI click later.
+   */
+  updateAvailable = $state<{
+    version: string;
+    body: string | null;
+    update: { downloadAndInstall: () => Promise<void> };
+  } | null>(null);
+  /** True while a download/install is in flight, so the sidebar can show progress. */
+  updateInstalling = $state(false);
 
   filtered = $derived(
     this.search.trim() === ''
@@ -717,6 +731,61 @@ class ProjectStore {
   reportError(message: string, title = 'Something went wrong') {
     this.error = message;
     toast.error(message, title);
+  }
+
+  /**
+   * Read the bundled app version from tauri.conf.json. Cheap, runs once at
+   * boot. Used by the sidebar version pill.
+   */
+  async loadAppVersion() {
+    try {
+      const { getVersion } = await import('@tauri-apps/api/app');
+      this.appVersion = await getVersion();
+    } catch {
+      // Non-fatal — sidebar will just hide the version pill.
+    }
+  }
+
+  /**
+   * Ask the updater plugin if a newer release exists. Stores the full update
+   * object so a later UI click can call downloadAndInstall() without
+   * re-checking. Silent failures are intentional: no network, no published
+   * release, signature mismatch — none should bug the user about it.
+   */
+  async checkForUpdate() {
+    try {
+      const { check } = await import('@tauri-apps/plugin-updater');
+      const update = await check();
+      if (update?.available) {
+        this.updateAvailable = {
+          version: update.version,
+          body: update.body ?? null,
+          update,
+        };
+      } else {
+        this.updateAvailable = null;
+      }
+    } catch {
+      this.updateAvailable = null;
+    }
+  }
+
+  /**
+   * Download + install the pending update, then relaunch. Called from the
+   * sidebar's "Update available" button. Surfaces failures via toast since
+   * download or signature errors are something the user should see.
+   */
+  async installUpdate() {
+    if (!this.updateAvailable || this.updateInstalling) return;
+    this.updateInstalling = true;
+    try {
+      await this.updateAvailable.update.downloadAndInstall();
+      const { relaunch } = await import('@tauri-apps/plugin-process');
+      await relaunch();
+    } catch (e) {
+      this.reportError(`Update failed: ${e}`, 'Update');
+      this.updateInstalling = false;
+    }
   }
 }
 
