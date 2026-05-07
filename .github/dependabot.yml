@@ -1,8 +1,7 @@
 version: 2
 updates:
-  # Bundle every Cargo update into a single monthly PR. Tauri / Tokio used to
-  # be in their own groups; collapsed because the volume wasn't worth the
-  # split for a solo maintainer.
+  # Bundle every Cargo update into a single monthly PR. Major bumps are
+  # ignored — opt into those manually after reviewing breaking changes.
   - package-ecosystem: cargo
     directory: /src-tauri
     schedule:
@@ -12,8 +11,11 @@ updates:
       cargo-deps:
         patterns:
           - "*"
+    ignore:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
 
-  # Root npm deps (SvelteKit + Tauri plugins). One PR per month.
+  # Root npm deps (SvelteKit + Tauri plugins). Same rules.
   - package-ecosystem: npm
     directory: /
     schedule:
@@ -23,8 +25,11 @@ updates:
       npm-deps:
         patterns:
           - "*"
+    ignore:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
 
-  # Marketing site has its own package.json. Same deal: one PR per month.
+  # Marketing site has its own package.json. Same rules.
   - package-ecosystem: npm
     directory: /website
     schedule:
@@ -34,6 +39,9 @@ updates:
       website-deps:
         patterns:
           - "*"
+    ignore:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
 
   # GitHub Actions: low churn, monthly is plenty.
   - package-ecosystem: github-actions
@@ -45,3 +53,6 @@ updates:
       actions:
         patterns:
           - "*"
+    ignore:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
