@@ -75,12 +75,12 @@ jobs:
             PRERELEASE="false"
             NAME="Sail Manager ${TAG}"
           else
-            # main push or manual dispatch: synthetic per-commit prerelease.
+            # main push or manual dispatch: synthetic per-commit full release.
             COMMIT_COUNT=$(git rev-list --count HEAD)
             SHORT_SHA=$(git rev-parse --short HEAD)
             TAG="v${PKG_VERSION}-build.${COMMIT_COUNT}.${SHORT_SHA}"
             DRAFT="false"
-            PRERELEASE="true"
+            PRERELEASE="false"
             NAME="Sail Manager v${PKG_VERSION} (build ${COMMIT_COUNT})"
           fi
           {
