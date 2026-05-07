@@ -1,17 +1,54 @@
+# OS junk
 .DS_Store
+Thumbs.db
+Desktop.ini
+.AppleDouble
+.LSOverride
+
+# Node / SvelteKit / Vite
 node_modules
 /build
 /.svelte-kit
 /package
-.env
-.env.*
-!.env.example
+*.tsbuildinfo
+.eslintcache
+.stylelintcache
 vite.config.js.timestamp-*
 vite.config.ts.timestamp-*
 
-# Local-only architecture / development notes (not for the public repo)
-CLAUDE.md
+# Test / coverage output
+coverage/
+.nyc_output/
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Env files (never commit secrets)
+.env
+.env.*
+!.env.example
 
 # Editor / IDE config (personal, not for the public repo)
 .vscode/
 .idea/
+.fleet/
+.zed/
+.cursor/
+
+# Editor backup / swap files
+*.swp
+*.swo
+*.bak
+*~
+
+# Local-only architecture / development notes (not for the public repo)
+CLAUDE.md
+
+# Local build outputs (Tauri bundles end up under src-tauri/target/, but in
+# case anyone drops a built DMG / .app at the repo root, ignore those too)
+*.dmg
+*.app
