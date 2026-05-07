@@ -1,0 +1,180 @@
+---
+const GITHUB_URL = 'https://github.com/LuukDahlmans/Laravel-Sail-Manager';
+---
+
+<section class="hero" aria-labelledby="hero-title">
+  <div class="container">
+    <span class="eyebrow hero-eyebrow reveal">
+      Open source · MIT · Made for
+      <svg viewBox="0 0 24 24" width="11" height="11" fill="currentColor" aria-label="Apple">
+        <path d="M17.05 20.28c-.98.95-2.05.8-3.08.35-1.09-.46-2.09-.48-3.24 0-1.44.62-2.2.44-3.06-.35C2.79 15.25 3.51 7.59 9.05 7.31c1.35.07 2.29.74 3.08.8 1.18-.24 2.31-.93 3.57-.84 1.51.12 2.65.72 3.4 1.8-3.12 1.87-2.38 5.98.48 7.13-.57 1.5-1.31 2.99-2.54 4.09zM12 7.25c-.15-2.23 1.66-4.07 3.74-4.25.29 2.58-2.34 4.5-3.74 4.25z"/>
+      </svg>
+    </span>
+    <h1 id="hero-title" class="seo-h1 reveal" style="--delay: 30ms">
+      Laravel Sail management. Run multiple Sail apps at the same time.
+    </h1>
+    <p class="hero-headline reveal" style="--delay: 60ms">
+      Stop killing one project<br />
+      to start <span class="grad">another</span>.
+    </p>
+    <p class="lede reveal" style="--delay: 140ms">
+      Out of the box, Sail wants port 80, 3306, and 6379. So the second project
+      you try to run won't. Sail Manager hands every project its own ports,
+      keeps the containers in line, and gives you real <code>.test</code> URLs
+      to visit. It's the missing dashboard for running ten Laravel apps at the
+      same time on a Mac.
+    </p>
+    <div class="cta-row reveal" style="--delay: 220ms">
+      <a class="btn btn-primary btn-lg" href="#download">
+        <svg viewBox="0 0 24 24" width="15" height="15" fill="currentColor" aria-hidden="true">
+          <path d="M17.05 20.28c-.98.95-2.05.8-3.08.35-1.09-.46-2.09-.48-3.24 0-1.44.62-2.2.44-3.06-.35C2.79 15.25 3.51 7.59 9.05 7.31c1.35.07 2.29.74 3.08.8 1.18-.24 2.31-.93 3.57-.84 1.51.12 2.65.72 3.4 1.8-3.12 1.87-2.38 5.98.48 7.13-.57 1.5-1.31 2.99-2.54 4.09zM12 7.25c-.15-2.23 1.66-4.07 3.74-4.25.29 2.58-2.34 4.5-3.74 4.25z"/>
+        </svg>
+        Download
+      </a>
+      <a class="btn btn-ghost btn-lg" href={GITHUB_URL} target="_blank" rel="noopener">
+        <svg viewBox="0 0 24 24" width="15" height="15" fill="currentColor" aria-hidden="true">
+          <path d="M12 .3a12 12 0 0 0-3.8 23.4c.6.1.8-.3.8-.6v-2c-3.3.7-4-1.6-4-1.6-.6-1.4-1.4-1.8-1.4-1.8-1.1-.7.1-.7.1-.7 1.2.1 1.9 1.3 1.9 1.3 1.1 1.9 2.9 1.3 3.6 1 .1-.8.4-1.4.8-1.7-2.7-.3-5.5-1.3-5.5-6 0-1.3.5-2.4 1.2-3.2-.1-.3-.5-1.5.1-3.2 0 0 1-.3 3.3 1.2a11.5 11.5 0 0 1 6 0c2.3-1.5 3.3-1.2 3.3-1.2.6 1.7.2 2.9.1 3.2.8.8 1.2 1.9 1.2 3.2 0 4.6-2.8 5.6-5.5 6 .4.4.8 1.1.8 2.2v3.3c0 .3.2.7.8.6A12 12 0 0 0 12 .3z"/>
+        </svg>
+        Star on GitHub
+      </a>
+    </div>
+
+    <div class="signals reveal" style="--delay: 320ms">
+      <div class="signal">
+        <span class="check">
+          <svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg>
+        </span>
+        <span>Run <strong>multiple Sail apps</strong> at once</span>
+      </div>
+      <div class="signal">
+        <span class="check">
+          <svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg>
+        </span>
+        <span>Auto <strong>HTTPS &amp; .test domains</strong></span>
+      </div>
+      <div class="signal">
+        <span class="check">
+          <svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg>
+        </span>
+        <span>Auto-start <strong>queue, schedule &amp; more</strong></span>
+      </div>
+      <div class="signal">
+        <span class="check">
+          <svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg>
+        </span>
+        <span>Always <strong>free &amp; open source</strong></span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<style>
+  .hero {
+    padding: 6rem 0 1.5rem;
+    text-align: center;
+    position: relative;
+  }
+  .hero-eyebrow {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+  }
+  .hero-eyebrow svg {
+    /* Pull the Apple glyph up a hair so it baselines with the small caps. */
+    margin-top: -1px;
+  }
+
+  /* The semantic H1 — keyword-rich for search engines, visually subordinate
+     to the punchy hero phrase below. Smaller and dimmer so it reads as a
+     positioning line under the eyebrow rather than competing with the hook. */
+  .seo-h1 {
+    font-size: clamp(15px, 1.6vw, 18px);
+    font-weight: 500;
+    color: var(--text-dim);
+    letter-spacing: -0.005em;
+    line-height: 1.45;
+    max-width: 580px;
+    margin: 14px auto 22px;
+  }
+
+  /* Visual hero phrase. Was an <h1> before; now a styled <p> so we keep one
+     H1 per page (better SEO) without giving up the big-typography moment. */
+  .hero-headline {
+    font-family: inherit;
+    font-size: clamp(2.4rem, 5.2vw, 4rem);
+    font-weight: 650;
+    letter-spacing: -0.035em;
+    line-height: 1.04;
+    color: var(--text);
+    margin: 0 auto;
+  }
+  .grad {
+    background: linear-gradient(135deg, var(--accent) 0%, #ff8a52 100%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+    color: transparent;
+    background-size: 200% 200%;
+    animation: shimmer 6s ease-in-out infinite;
+  }
+  h1 { line-height: 1.04; }
+  .lede {
+    max-width: 640px;
+    margin: 1.5rem auto 0;
+    font-size: 1.05rem;
+    line-height: 1.65;
+  }
+  .cta-row {
+    display: flex;
+    gap: 0.6rem;
+    justify-content: center;
+    flex-wrap: wrap;
+    margin-top: 2rem;
+  }
+
+  .signals {
+    display: flex;
+    gap: 8px;
+    justify-content: center;
+    flex-wrap: wrap;
+    margin-top: 2.5rem;
+    padding: 0;
+  }
+  .signal {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 7px 14px;
+    background: var(--bg-2);
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    font-size: 12px;
+    color: var(--text-dim);
+    transition: background 0.15s var(--ease-quick), border-color 0.15s var(--ease-quick), transform 0.15s var(--ease-quick);
+  }
+  .signal:hover {
+    background: var(--bg-3);
+    border-color: var(--border-strong);
+    transform: translateY(-1px);
+  }
+  .signal strong {
+    color: var(--text);
+    font-weight: 650;
+  }
+  .check {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    background: var(--success-soft);
+    color: var(--success);
+    flex-shrink: 0;
+  }
+
+  @keyframes shimmer {
+    0%, 100% { background-position: 0% 50%; }
+    50%      { background-position: 100% 50%; }
+  }
+</style>

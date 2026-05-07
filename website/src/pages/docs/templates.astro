@@ -1,0 +1,41 @@
+---
+import DocsLayout from '../../layouts/DocsLayout.astro';
+---
+
+<DocsLayout
+  slug="templates"
+  title="Templates"
+  description="Save your stack and reuse it on every new project. Includes the three built-in defaults."
+>
+  <section>
+    <h2 id="what-templates">What templates do</h2>
+    <p>
+      A template captures a starter kit, a PHP version, and a set of services. When you create
+      a new project, you can pick a template and the form gets pre-filled. Useful for teams
+      that always run the same stack, or just to skip the "click 8 checkboxes" ritual.
+    </p>
+  </section>
+
+  <section>
+    <h2 id="create-template">Creating one</h2>
+    <p>Templates page, then "New template".</p>
+    <ul class="bullets">
+      <li><strong>Name</strong> (required, unique).</li>
+      <li><strong>Description</strong> for your future self.</li>
+      <li><strong>Services</strong> (the same 13 you'd pick when creating a project).</li>
+      <li><strong>PHP version.</strong></li>
+      <li><strong>Starter kit.</strong></li>
+    </ul>
+    <p>Edit and delete from the same page. Used templates aren't locked, you can change them whenever.</p>
+  </section>
+
+  <section>
+    <h2 id="built-in-templates">Built-in templates</h2>
+    <p>The app ships with three to get you started. They reset on a fresh install or after a Reset application.</p>
+    <ul class="bullets">
+      <li><strong>Plain Laravel.</strong> MySQL, Redis, Mailpit, no starter kit, PHP 8.3.</li>
+      <li><strong>Breeze + MySQL.</strong> MySQL, Redis, Mailpit, Breeze, PHP 8.3.</li>
+      <li><strong>API only.</strong> MySQL, Redis. No Mailpit. No starter kit. PHP 8.3.</li>
+    </ul>
+  </section>
+</DocsLayout>

@@ -1,0 +1,31 @@
+---
+import Layout from '../layouts/Layout.astro';
+import Nav from '../components/Nav.astro';
+import Footer from '../components/Footer.astro';
+---
+
+<Layout title="Page not found" noindex={true}>
+  <Nav />
+  <main id="main">
+    <section class="empty">
+      <div class="container">
+        <span class="eyebrow">404</span>
+        <h1>That page doesn't exist.</h1>
+        <p>The link is dead, the URL is mistyped, or the page never existed.</p>
+        <a class="btn btn-primary" href="/">Back home</a>
+      </div>
+    </section>
+  </main>
+  <Footer />
+</Layout>
+
+<style>
+  .empty {
+    text-align: center;
+    padding: 8rem 0;
+  }
+  .empty p {
+    margin: 1rem auto 2rem;
+    max-width: 480px;
+  }
+</style>

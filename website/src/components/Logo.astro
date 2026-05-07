@@ -1,0 +1,49 @@
+---
+interface Props {
+  size?: number;
+  variant?: 'default' | 'flat';
+}
+const { size = 32, variant = 'default' }: Props = Astro.props;
+const id = `logo-grad-${Math.random().toString(36).slice(2, 8)}`;
+---
+
+<span class="logo-mark" style={`width:${size}px;height:${size}px`} data-variant={variant}>
+  <svg viewBox="0 0 64 64" width={size} height={size} aria-hidden="true">
+    <defs>
+      <linearGradient id={id} x1="0" y1="0" x2="64" y2="64">
+        <stop offset="0%" stop-color="#ff3a2e" />
+        <stop offset="100%" stop-color="#b62519" />
+      </linearGradient>
+    </defs>
+    <rect width="64" height="64" rx={Math.max(10, size * 0.28)} fill={`url(#${id})`} />
+    <g
+      stroke="#fff"
+      stroke-width={Math.max(2.5, size * 0.09)}
+      stroke-linecap="round"
+      stroke-linejoin="round"
+      fill="none"
+    >
+      <path d="M12 22c4 4 8 4 12 0s8-4 12 0 8 4 12 0" />
+      <path d="M12 32c4 4 8 4 12 0s8-4 12 0 8 4 12 0" />
+      <path d="M12 42c4 4 8 4 12 0s8-4 12 0 8 4 12 0" />
+    </g>
+  </svg>
+</span>
+
+<style>
+  .logo-mark {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    border-radius: 28%;
+    box-shadow:
+      0 1px 0 rgba(255, 255, 255, 0.18) inset,
+      0 0 0 1px rgba(255, 255, 255, 0.06),
+      0 4px 14px var(--accent-glow);
+  }
+  .logo-mark[data-variant='flat'] {
+    box-shadow: none;
+  }
+  .logo-mark svg { display: block; }
+</style>

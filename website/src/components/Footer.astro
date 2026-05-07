@@ -1,0 +1,115 @@
+---
+import Logo from './Logo.astro';
+const GITHUB_URL = 'https://github.com/LuukDahlmans/Laravel-Sail-Manager';
+const year = new Date().getFullYear();
+---
+
+<footer class="footer">
+  <div class="container footer-inner">
+    <div class="footer-brand">
+      <div class="brand-row">
+        <Logo size={26} />
+        <strong>Sail Manager</strong>
+      </div>
+      <p>Run every Laravel Sail project at once. Open source, MIT licensed.</p>
+    </div>
+
+    <div class="cols">
+      <div class="col">
+        <h4>Project</h4>
+        <a href="/docs">Documentation</a>
+        <a href="/blog">Blog</a>
+        <a href={GITHUB_URL} target="_blank" rel="noopener">GitHub</a>
+        <a href={`${GITHUB_URL}/releases`} target="_blank" rel="noopener">Releases</a>
+        <a href={`${GITHUB_URL}/blob/main/CHANGELOG.md`} target="_blank" rel="noopener">Changelog</a>
+      </div>
+      <div class="col">
+        <h4>Community</h4>
+        <a href={`${GITHUB_URL}/issues`} target="_blank" rel="noopener">Issues</a>
+        <a href={`${GITHUB_URL}/discussions`} target="_blank" rel="noopener">Discussions</a>
+        <a href={`${GITHUB_URL}/blob/main/CONTRIBUTING.md`} target="_blank" rel="noopener">Contributing</a>
+      </div>
+      <div class="col">
+        <h4>Legal</h4>
+        <a href={`${GITHUB_URL}/blob/main/LICENSE`} target="_blank" rel="noopener">MIT License</a>
+        <a href={`${GITHUB_URL}/blob/main/SECURITY.md`} target="_blank" rel="noopener">Security</a>
+      </div>
+    </div>
+  </div>
+
+  <div class="container fineprint">
+    <p>
+      © {year} Sail Manager contributors. This is an independent community project,
+      not affiliated with or endorsed by the Laravel project. "Laravel" and "Laravel Sail"
+      are trademarks of Taylor Otwell.
+    </p>
+  </div>
+</footer>
+
+<style>
+  .footer {
+    border-top: 1px solid var(--border);
+    padding: 4rem 0 2rem;
+    margin-top: 3rem;
+    background: var(--bg-1);
+  }
+  .footer-inner {
+    display: grid;
+    grid-template-columns: 1.2fr 2fr;
+    gap: 3rem;
+  }
+  .footer-brand p {
+    margin-top: 0.85rem;
+    font-size: 13px;
+    max-width: 280px;
+    line-height: 1.55;
+  }
+  .brand-row {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+  }
+  .brand-row strong {
+    font-size: 14px;
+    font-weight: 650;
+    color: var(--text);
+    letter-spacing: -0.015em;
+  }
+  .cols {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 2rem;
+  }
+  .col h4 {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--text-faint);
+    margin-bottom: 0.85rem;
+    font-weight: 600;
+  }
+  .col a {
+    display: block;
+    color: var(--text-dim);
+    font-size: 13px;
+    padding: 0.25rem 0;
+  }
+  .col a:hover { color: var(--accent); }
+
+  .fineprint {
+    margin-top: 3rem;
+    padding-top: 2rem;
+    border-top: 1px solid var(--border);
+  }
+  .fineprint p {
+    font-size: 11px;
+    color: var(--text-faint);
+    line-height: 1.55;
+    max-width: 720px;
+  }
+
+  @media (max-width: 720px) {
+    .footer-inner { grid-template-columns: 1fr; gap: 2rem; }
+    .cols { grid-template-columns: repeat(2, 1fr); gap: 1.5rem; }
+  }
+</style>

@@ -1,0 +1,107 @@
+---
+import DocsLayout from '../../layouts/DocsLayout.astro';
+---
+
+<DocsLayout
+  slug="projects"
+  title="Projects"
+  description="Create new Sail projects, clone from Git, import existing folders, and manage starts and stops."
+>
+  <section>
+    <h2 id="create-new">Create a new project</h2>
+    <p>
+      Click <strong>Create</strong> in the project list and pick "New project". The form
+      scaffolds a fresh Laravel + Sail app via Docker, so no PHP install needed.
+    </p>
+    <h3>Form fields</h3>
+    <ul class="bullets">
+      <li><strong>Name.</strong> Letters, numbers, and hyphens. Has to start with a letter. Becomes the folder name and (with local URLs on) the subdomain.</li>
+      <li><strong>PHP version.</strong> 8.2, 8.3, or 8.4.</li>
+      <li><strong>Starter kit.</strong> None, Breeze, or Jetstream. Picks what <code>laravel new</code> ships with.</li>
+      <li><strong>Services.</strong> Tick which Sail services you want. They're grouped by Database, Cache, Search, Mail, Storage, and Tools. See the <a href="/docs/services">full list</a>.</li>
+      <li><strong>Custom services.</strong> Free-form names you can add to the compose file. Useful for things outside the built-in 13.</li>
+    </ul>
+    <h3>What happens when you click Create</h3>
+    <ol class="steps">
+      <li>The app pulls the <code>laravelsail/php{`{X}`}-composer</code> Docker image (cached after first time).</li>
+      <li>Runs <code>laravel new --no-interaction</code> inside that container, against your projects folder.</li>
+      <li>Runs <code>composer require laravel/sail --dev</code> followed by <code>php artisan sail:install --with=...</code> for the services you picked.</li>
+      <li>Allocates host ports for every service and writes them into <code>.env</code> (<code>APP_PORT</code>, <code>FORWARD_DB_PORT</code>, <code>FORWARD_REDIS_PORT</code>, etc.).</li>
+      <li>Sets <code>COMPOSE_PROJECT_NAME</code> so containers don't collide with other projects.</li>
+      <li>If local URLs are on, regenerates the Traefik config so <code>http://&lt;name&gt;.&lt;tld&gt;</code> resolves to your new project.</li>
+    </ol>
+    <p>The build output streams live, so you can see what's happening.</p>
+  </section>
+
+  <section>
+    <h2 id="clone-from-git">Clone from Git</h2>
+    <p>
+      For projects that already exist somewhere remote. Click <strong>Create</strong> and pick "Clone from Git".
+    </p>
+    <ul class="bullets">
+      <li><strong>Repository URL.</strong> HTTPS, SSH, or shorthand like <code>git@github.com:org/repo</code> all work.</li>
+      <li><strong>Project name.</strong> Optional. If you leave it blank, the app derives one from the URL.</li>
+      <li><strong>Branch.</strong> Optional. Falls back to whatever the remote's default is.</li>
+      <li><strong>PHP version.</strong> Used if the repo doesn't already have Sail installed.</li>
+    </ul>
+    <p>
+      After cloning, the app checks if the repo has Sail. If not, it runs
+      <code>composer require laravel/sail --dev</code> and <code>sail:install</code> inside the
+      same composer Docker image used for new projects. Either way it allocates ports and
+      registers the project.
+    </p>
+  </section>
+
+  <section>
+    <h2 id="import-existing">Import an existing folder</h2>
+    <p>
+      For projects you already have on disk. Click <strong>Create</strong> and pick "Import existing".
+    </p>
+    <ul class="bullets">
+      <li>Browse to the folder, or paste the path. <code>~</code> gets expanded.</li>
+      <li>The folder must contain a <code>compose.yaml</code> (or <code>docker-compose.yml</code>) and a <code>.env</code> file.</li>
+      <li>Ports are read from the <code>FORWARD_*</code> keys in <code>.env</code>. The app doesn't change anything.</li>
+      <li>If <code>compose.yaml</code> is present but Sail isn't fully installed, the app won't try to fix it. The folder gets registered as-is.</li>
+    </ul>
+  </section>
+
+  <section>
+    <h2 id="starting-stopping">Start, stop, delete</h2>
+    <h3>Start a project</h3>
+    <ol class="steps">
+      <li>Click the play button on the project row, or open the project and click Start.</li>
+      <li>The app runs <code>docker compose up -d --wait</code> so it blocks until the containers report healthy.</li>
+      <li>It runs <code>php artisan migrate --force</code> so a fresh project doesn't 500 on every page (Laravel 11+ uses the database session driver by default).</li>
+      <li>Any enabled <a href="/docs/auto-commands">auto-commands</a> fire next.</li>
+    </ol>
+    <h3>Stop a project</h3>
+    <p>Stop runs <code>docker compose down</code>. Service-mode auto-commands get killed cleanly first.</p>
+    <h3>Bulk actions</h3>
+    <p>
+      On the project list, you'll see "Start all" and "Stop all" buttons. They iterate sequentially with a small delay between each, so Docker doesn't get hammered.
+    </p>
+    <h3>Delete a project</h3>
+    <p>From the project's overview, click the trash icon. You'll get a confirmation modal with two options:</p>
+    <ul class="bullets">
+      <li><strong>Remove from Sail Manager only.</strong> Stops the containers and unregisters. Files stay on disk.</li>
+      <li><strong>Remove and delete folder.</strong> Same as above, plus deletes the project folder.</li>
+    </ul>
+    <p>The Docker image cache and your Docker volumes are not touched either way.</p>
+  </section>
+
+  <section>
+    <h2 id="port-allocation">How ports get assigned</h2>
+    <p>
+      Sail's defaults pin every project to the same host ports (80, 3306, 6379, etc.), which is why you can only run one project at a time out of the box. Sail Manager fixes this by giving every service in every project a unique host port.
+    </p>
+    <p>
+      On Mac, just probing <code>127.0.0.1</code> isn't enough. Docker holds the IPv6 wildcard
+      (<code>[::]</code>) when it binds a port, so a port can look free on IPv4 and conflict
+      anyway. The allocator binds both <code>0.0.0.0:&lt;port&gt;</code> and
+      <code>[::]:&lt;port&gt;</code> before claiming a port.
+    </p>
+    <p>
+      All of this gets written into the project's <code>.env</code>. The compose file is never touched, so pulling teammate changes never conflicts with what the app set up.
+    </p>
+  </section>
+</DocsLayout>

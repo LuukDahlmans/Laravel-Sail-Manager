@@ -1,0 +1,65 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 1000" width="1600" height="1000">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#fafafa"/>
+      <stop offset="100%" stop-color="#eeeeee"/>
+    </linearGradient>
+    <linearGradient id="logo" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#ff2d20"/>
+      <stop offset="100%" stop-color="#c91d12"/>
+    </linearGradient>
+  </defs>
+
+  <rect width="1600" height="1000" fill="url(#bg)"/>
+
+  <!-- Brand mark -->
+  <g transform="translate(800 230)">
+    <rect x="-58" y="-58" width="116" height="116" rx="26" ry="26" fill="url(#logo)"/>
+    <g
+      transform="translate(-37 -37) scale(3.08)"
+      fill="none"
+      stroke="white"
+      stroke-width="2.2"
+      stroke-linecap="round"
+      stroke-linejoin="round"
+    >
+      <path d="M2 6c2 2 4 2 6 0s4-2 6 0 4 2 6 0"/>
+      <path d="M2 12c2 2 4 2 6 0s4-2 6 0 4 2 6 0"/>
+      <path d="M2 18c2 2 4 2 6 0s4-2 6 0 4 2 6 0"/>
+    </g>
+  </g>
+
+  <text
+    x="800" y="380"
+    text-anchor="middle"
+    font-family="-apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Helvetica Neue', sans-serif"
+    font-size="58"
+    font-weight="700"
+    fill="#1d1d1f"
+    letter-spacing="-1"
+  >Sail Manager</text>
+
+  <text
+    x="800" y="430"
+    text-anchor="middle"
+    font-family="-apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Helvetica Neue', sans-serif"
+    font-size="24"
+    font-weight="400"
+    fill="#6a6a70"
+  >Drag to your Applications folder to install</text>
+
+  <!-- Dashed arrow between the two icon positions (y≈700 in window points × 2) -->
+  <g stroke="#d92e22" stroke-width="3" fill="none" stroke-linecap="round">
+    <path
+      d="M 540 720 C 700 660, 900 660, 1060 720"
+      stroke-dasharray="10 12"
+      opacity="0.7"
+    />
+    <!-- Arrow head pointing right -->
+    <path
+      d="M 1052 700 L 1075 720 L 1052 740"
+      stroke-linejoin="round"
+      opacity="0.85"
+    />
+  </g>
+</svg>

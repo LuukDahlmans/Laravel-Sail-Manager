@@ -1,0 +1,34 @@
+---
+import DocsLayout from '../../layouts/DocsLayout.astro';
+---
+
+<DocsLayout
+  slug="editors"
+  title="Editor integrations"
+  description='Open in editor: PhpStorm, VS Code, Cursor, and Zed.'
+>
+  <section>
+    <h2 id="supported-editors">Supported editors</h2>
+    <p>Settings, then Editor lets you pick which editor "Open in editor" uses.</p>
+    <ul class="bullets">
+      <li><strong>PhpStorm</strong></li>
+      <li><strong>Visual Studio Code</strong></li>
+      <li><strong>Cursor</strong></li>
+      <li><strong>Zed</strong></li>
+    </ul>
+    <p>The editor needs to be installed for the button to work, but you don't have to install all four.</p>
+  </section>
+
+  <section>
+    <h2 id="how-it-opens">How "Open in editor" works</h2>
+    <p>
+      The app shells out to <code>open -a &lt;Editor&gt; &lt;path&gt;</code>. Same thing you'd run
+      in Terminal yourself. Whatever your editor does for "open folder" is what happens.
+    </p>
+    <div class="note">
+      If the button does nothing, double-check that the editor is in <code>/Applications</code>
+      under exactly the name the app expects. PhpStorm needs to be named "PhpStorm.app",
+      not "PhpStorm 2024.app".
+    </div>
+  </section>
+</DocsLayout>

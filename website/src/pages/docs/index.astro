@@ -1,0 +1,360 @@
+---
+import Layout from '../../layouts/Layout.astro';
+import Nav from '../../components/Nav.astro';
+import Footer from '../../components/Footer.astro';
+import { docGroups, allPages } from '../../lib/docs';
+
+const searchIndex = allPages.map((p) => ({
+  slug: p.slug,
+  title: p.title,
+  description: p.description,
+  sections: p.sections,
+}));
+
+// Cards on the index page mirror the sidebar groups so this page is a true
+// landing — every topic gets a tile with a one-line description.
+---
+
+<Layout
+  title="Documentation"
+  description="Complete documentation for Sail Manager. Install, create projects, set up .test URLs, configure auto-commands and templates, troubleshoot, and more."
+>
+  <Nav />
+  <main id="main" class="docs-index-page">
+    <section class="hero-section">
+      <div class="container">
+        <span class="eyebrow">Documentation</span>
+        <h1>Sail Manager docs</h1>
+        <p class="lede">
+          Everything you can do with the app, written so you don't need to read it twice.
+          Use the search bar (or hit <kbd>⌘K</kbd> anywhere) to jump straight to a section.
+        </p>
+
+        <div class="search-wrap">
+          <svg class="search-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <circle cx="11" cy="11" r="7"></circle>
+            <path d="m20 20-3.5-3.5"></path>
+          </svg>
+          <input
+            type="search"
+            id="docs-search"
+            placeholder="Search the docs"
+            autocomplete="off"
+            aria-label="Search documentation"
+          />
+          <kbd class="kbd-hint" aria-hidden="true">⌘K</kbd>
+        </div>
+        <div class="search-results" id="docs-search-results" role="listbox" aria-label="Search results"></div>
+      </div>
+    </section>
+
+    <section class="groups">
+      <div class="container">
+        {docGroups.map((group) => (
+          <div class="group">
+            <h2>{group.title}</h2>
+            <div class="cards">
+              {group.pages.map((page) => (
+                <a href={`/docs/${page.slug}`} class="card">
+                  <span class="card-title">{page.title}</span>
+                  <span class="card-desc">{page.description}</span>
+                  <span class="card-arrow" aria-hidden="true">→</span>
+                </a>
+              ))}
+            </div>
+          </div>
+        ))}
+      </div>
+    </section>
+  </main>
+  <Footer />
+</Layout>
+
+<script type="application/json" id="docs-search-data" set:html={JSON.stringify(searchIndex)}></script>
+
+<script is:inline>
+  // Same search logic as DocsLayout. Inlined here so the index page can be
+  // searched-from too without forcing a JS bundle.
+  (function () {
+    const dataEl = document.getElementById('docs-search-data');
+    const input = document.getElementById('docs-search');
+    const results = document.getElementById('docs-search-results');
+    if (!dataEl || !input || !results) return;
+
+    let pages = [];
+    try { pages = JSON.parse(dataEl.textContent || '[]'); } catch (_) {}
+
+    function score(text, query) {
+      if (!text) return 0;
+      const t = text.toLowerCase();
+      const idx = t.indexOf(query);
+      if (idx < 0) return 0;
+      let s = 100 - idx;
+      if (idx === 0 || /\s/.test(t.charAt(idx - 1))) s += 30;
+      return s;
+    }
+
+    function search(rawQuery) {
+      const q = rawQuery.trim().toLowerCase();
+      if (q.length < 2) return [];
+      const hits = [];
+      for (const page of pages) {
+        const titleScore = score(page.title, q) * 3;
+        const descScore = score(page.description, q);
+        if (titleScore || descScore) {
+          hits.push({ type: 'page', page, section: null, score: titleScore + descScore });
+        }
+        for (const section of page.sections) {
+          const sectionScore = score(section.label, q) * 2;
+          if (sectionScore) {
+            hits.push({ type: 'section', page, section, score: sectionScore });
+          }
+        }
+      }
+      hits.sort((a, b) => b.score - a.score);
+      return hits.slice(0, 10);
+    }
+
+    function escapeHtml(s) {
+      return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+    }
+
+    function highlight(text, query) {
+      if (!query) return text;
+      const i = text.toLowerCase().indexOf(query.toLowerCase());
+      if (i < 0) return text;
+      return text.slice(0, i) + '<mark>' + text.slice(i, i + query.length) + '</mark>' + text.slice(i + query.length);
+    }
+
+    function render(hits, query) {
+      if (!query || query.trim().length < 2) {
+        results.innerHTML = '';
+        results.classList.remove('open');
+        return;
+      }
+      results.classList.add('open');
+      if (hits.length === 0) {
+        results.innerHTML = '<p class="search-empty">No matches for <strong>' + escapeHtml(query) + '</strong>.</p>';
+        return;
+      }
+      results.innerHTML = hits.map((hit) => {
+        const href = hit.section ? '/docs/' + hit.page.slug + '#' + hit.section.id : '/docs/' + hit.page.slug;
+        const primary = hit.section ? hit.section.label : hit.page.title;
+        const secondary = hit.section ? hit.page.title : hit.page.description;
+        return (
+          '<a class="search-hit" href="' + href + '" role="option">' +
+          '<span class="hit-primary">' + highlight(escapeHtml(primary), query) + '</span>' +
+          '<span class="hit-secondary">' + escapeHtml(secondary) + '</span>' +
+          '</a>'
+        );
+      }).join('');
+    }
+
+    let last = '';
+    input.addEventListener('input', () => {
+      if (input.value === last) return;
+      last = input.value;
+      render(search(input.value), input.value);
+    });
+
+    document.addEventListener('keydown', (e) => {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
+        e.preventDefault();
+        input.focus();
+        input.select();
+      }
+      if (e.key === 'Escape' && document.activeElement === input) {
+        input.value = '';
+        last = '';
+        render([], '');
+        input.blur();
+      }
+    });
+  })();
+</script>
+
+<style>
+  .docs-index-page { padding-bottom: 4rem; }
+
+  .hero-section {
+    padding: 3.5rem 0 2rem;
+    text-align: center;
+    border-bottom: 1px solid var(--border);
+  }
+  .hero-section h1 {
+    font-size: clamp(2.2rem, 4vw, 3rem);
+    letter-spacing: -0.025em;
+    margin: 0.5rem 0 0.85rem;
+  }
+  .hero-section .lede {
+    font-size: 1rem;
+    color: var(--text-dim);
+    line-height: 1.6;
+    max-width: 580px;
+    margin: 0 auto 1.5rem;
+  }
+  .hero-section .lede kbd {
+    background: var(--bg-3);
+    border: 1px solid var(--border-strong);
+    border-radius: 4px;
+    padding: 1px 6px;
+    font-family: ui-monospace, 'SF Mono', monospace;
+    font-size: 11px;
+    color: var(--text);
+  }
+
+  .search-wrap {
+    position: relative;
+    max-width: 540px;
+    margin: 0 auto;
+  }
+  .search-wrap input {
+    width: 100%;
+    padding: 12px 56px 12px 38px;
+    background: var(--bg-2);
+    border: 1px solid var(--border-strong);
+    border-radius: var(--radius);
+    color: var(--text);
+    font-size: 14px;
+    font-family: inherit;
+    outline: none;
+    transition: border-color 0.15s var(--ease-quick), background 0.15s var(--ease-quick);
+  }
+  .search-wrap input::placeholder { color: var(--text-faint); }
+  .search-wrap input:focus {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px var(--accent-soft);
+  }
+  .search-icon {
+    position: absolute;
+    left: 13px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: var(--text-faint);
+    pointer-events: none;
+  }
+  .kbd-hint {
+    position: absolute;
+    right: 10px;
+    top: 50%;
+    transform: translateY(-50%);
+    background: var(--bg-3);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 2px 7px;
+    font-family: ui-monospace, 'SF Mono', monospace;
+    font-size: 11px;
+    color: var(--text-faint);
+    pointer-events: none;
+  }
+  .search-wrap input:focus ~ .kbd-hint { display: none; }
+
+  .search-results {
+    display: none;
+    flex-direction: column;
+    gap: 4px;
+    max-width: 540px;
+    margin: 12px auto 0;
+    text-align: left;
+  }
+  .search-results.open { display: flex; }
+  .search-hit {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    padding: 10px 14px;
+    background: var(--bg-2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    color: var(--text-dim);
+    text-decoration: none;
+    transition: background 0.15s var(--ease-quick), border-color 0.15s var(--ease-quick);
+  }
+  .search-hit:hover {
+    background: var(--bg-3);
+    border-color: var(--accent-soft);
+  }
+  .hit-primary {
+    color: var(--text);
+    font-size: 13.5px;
+    font-weight: 600;
+  }
+  .hit-primary :global(mark) {
+    background: var(--accent-soft);
+    color: var(--accent);
+    padding: 0 2px;
+    border-radius: 2px;
+  }
+  .hit-secondary {
+    color: var(--text-faint);
+    font-size: 12px;
+    line-height: 1.5;
+  }
+  .search-empty {
+    margin: 0;
+    padding: 14px;
+    background: var(--bg-2);
+    border: 1px dashed var(--border-strong);
+    border-radius: 8px;
+    color: var(--text-faint);
+    font-size: 13px;
+    text-align: center;
+  }
+
+  .groups { padding: 3rem 0 0; }
+  .group { margin-bottom: 2.5rem; }
+  .group h2 {
+    font-size: 14px;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    color: var(--text-faint);
+    font-weight: 600;
+    margin-bottom: 1rem;
+    padding-bottom: 0.6rem;
+    border-bottom: 1px solid var(--border);
+  }
+  .cards {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 12px;
+  }
+  .card {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding: 18px 22px;
+    background: var(--bg-2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    color: var(--text-dim);
+    text-decoration: none;
+    transition: background 0.15s var(--ease-quick), border-color 0.15s var(--ease-quick), transform 0.15s var(--ease-quick);
+  }
+  .card:hover {
+    background: var(--bg-3);
+    border-color: var(--border-strong);
+    transform: translateY(-1px);
+  }
+  .card-title {
+    font-size: 15px;
+    font-weight: 650;
+    letter-spacing: -0.015em;
+    color: var(--text);
+  }
+  .card-desc {
+    font-size: 13px;
+    line-height: 1.55;
+  }
+  .card-arrow {
+    position: absolute;
+    top: 18px;
+    right: 18px;
+    color: var(--text-faint);
+    transition: color 0.15s var(--ease-quick), transform 0.15s var(--ease-quick);
+  }
+  .card:hover .card-arrow {
+    color: var(--accent);
+    transform: translateX(2px);
+  }
+</style>

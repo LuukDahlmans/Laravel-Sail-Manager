@@ -1,0 +1,168 @@
+---
+const features = [
+  {
+    title: 'Per-project ports, picked for you',
+    body:
+      "Each project gets its own APP_PORT, FORWARD_DB_PORT, and friends written into .env. No more arguing with port 80, no more manually editing compose.yaml.",
+    icon: 'ports',
+  },
+  {
+    title: 'Real .test URLs that just work',
+    body:
+      "Visit http://shop.test in any browser. Sail Manager handles the proxy and DNS so you don't have to touch /etc/hosts ever again.",
+    icon: 'globe',
+  },
+  {
+    title: "First boot doesn't 500 anymore",
+    body:
+      "Laravel 11 puts sessions in the database. Forget to migrate and every page is a 500. Sail Manager runs the migration automatically after the container is up.",
+    icon: 'spark',
+  },
+  {
+    title: 'Run anything when a project starts',
+    body:
+      "Horizon, queues, schedulers, npm dev, that one weird artisan command. Wire it up once and it boots with the project. Each gets its own log tab.",
+    icon: 'terminal',
+  },
+  {
+    title: 'Lives in your menu bar',
+    body:
+      "Start and stop projects from the tray, no app window needed. Closing the window doesn't quit. Your projects keep running until you tell them not to.",
+    icon: 'tray',
+  },
+  {
+    title: 'All the small tools, in one place',
+    body:
+      "Live logs, an interactive shell, git status, container CPU/RAM, TablePlus shortcuts, Mailpit one-click, plus Open in PhpStorm / VS Code / Cursor / Zed.",
+    icon: 'tools',
+  },
+  {
+    title: 'Use the projects you already have',
+    body:
+      "Point it at a folder with Sail and it figures out the rest. Or scaffold a brand new Laravel project. No PHP install required, everything runs in Docker.",
+    icon: 'import',
+  },
+  {
+    title: 'Templates so you stop reconfiguring',
+    body:
+      "Save your stack like MySQL, Redis, Mailpit, and Horizon together, then spin up the next project preconfigured with all of it. Useful for teams running the same setup.",
+    icon: 'template',
+  },
+];
+
+function icon(name: string): string {
+  const map: Record<string, string> = {
+    ports: '<path d="M3 12h18M7 8v8M17 8v8M11 6v12M11 6h2v12h-2z" />',
+    globe: '<circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"/>',
+    spark: '<path d="M12 2v6M12 16v6M2 12h6M16 12h6M5 5l4 4M15 15l4 4M19 5l-4 4M9 15l-4 4"/>',
+    terminal: '<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M7 9l3 3-3 3M13 15h4"/>',
+    tray: '<rect x="3" y="4" width="18" height="14" rx="2"/><path d="M3 13h6l1 2h4l1-2h6"/>',
+    tools: '<path d="M14 6l6 6-2 2-6-6 2-2zM6 14l-3 6 6-3M14 6l-8 8"/>',
+    import: '<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/>',
+    template: '<rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/>',
+  };
+  return map[name] ?? '';
+}
+---
+
+<section id="features" aria-labelledby="features-title">
+  <div class="container">
+    <div class="section-head reveal">
+      <span class="eyebrow">What it does</span>
+      <h2 id="features-title">Built for the actual day-to-day annoyances.</h2>
+      <p>Not a marketing list. These are the specific things that used to take five minutes of fighting Docker and now take zero.</p>
+    </div>
+
+    <div class="grid">
+      {features.map((f, i) => (
+        <article class="card reveal" style={`--delay: ${i * 50}ms`}>
+          <div class="icon" aria-hidden="true">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" set:html={icon(f.icon)} />
+          </div>
+          <h3>{f.title}</h3>
+          <p>{f.body}</p>
+        </article>
+      ))}
+    </div>
+  </div>
+</section>
+
+<style>
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+    gap: 12px;
+  }
+  .card {
+    background: var(--bg-2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 22px;
+    transition:
+      background 0.2s var(--ease-quick),
+      border-color 0.2s var(--ease-quick),
+      transform 0.2s var(--ease-quick),
+      box-shadow 0.2s var(--ease-quick);
+    position: relative;
+    overflow: hidden;
+  }
+  .card::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: radial-gradient(60% 80% at var(--mx, 50%) var(--my, 0%), var(--accent-soft) 0%, transparent 60%);
+    opacity: 0;
+    transition: opacity 0.25s ease;
+    pointer-events: none;
+  }
+  .card:hover {
+    background: var(--bg-3);
+    border-color: var(--border-strong);
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-card);
+  }
+  .card:hover::before { opacity: 1; }
+  .card > * { position: relative; z-index: 1; }
+
+  .icon {
+    width: 36px;
+    height: 36px;
+    border-radius: 8px;
+    background: var(--accent-soft);
+    color: var(--accent);
+    display: grid;
+    place-items: center;
+    margin-bottom: 0.85rem;
+    box-shadow: 0 0 0 1px var(--accent-soft) inset;
+    transition: transform 0.25s var(--ease-quick);
+  }
+  .card:hover .icon { transform: scale(1.08) rotate(-2deg); }
+
+  .card h3 {
+    margin-bottom: 0.4rem;
+    font-size: 15px;
+    font-weight: 650;
+    letter-spacing: -0.015em;
+    color: var(--text);
+  }
+  .card p {
+    font-size: 13px;
+    line-height: 1.55;
+    color: var(--text-dim);
+  }
+</style>
+
+<script>
+  // Pointer-tracked spotlight on feature cards. Keeps the page feeling alive
+  // without a heavy library — just a per-card mousemove handler.
+  const cards = document.querySelectorAll<HTMLElement>('#features .card');
+  cards.forEach((card) => {
+    card.addEventListener('mousemove', (e) => {
+      const rect = card.getBoundingClientRect();
+      const mx = ((e.clientX - rect.left) / rect.width) * 100;
+      const my = ((e.clientY - rect.top) / rect.height) * 100;
+      card.style.setProperty('--mx', `${mx}%`);
+      card.style.setProperty('--my', `${my}%`);
+    });
+  });
+</script>

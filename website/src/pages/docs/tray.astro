@@ -1,0 +1,51 @@
+---
+import DocsLayout from '../../layouts/DocsLayout.astro';
+---
+
+<DocsLayout
+  slug="tray"
+  title="Menu bar tray"
+  description="Per-project submenus, status glyphs, and hide vs quit behavior."
+>
+  <section>
+    <h2 id="submenus">Per-project submenus</h2>
+    <p>
+      There's a Sail Manager icon in your macOS menu bar. The title shows a running count
+      (e.g. " 2 running") so you can see at a glance whether anything is up.
+    </p>
+    <p>Each project gets its own submenu with these items:</p>
+    <ul class="bullets">
+      <li><strong>Open http://...</strong> visible only when the project is running. Uses the local URL if enabled, otherwise <code>localhost:&lt;port&gt;</code>.</li>
+      <li><strong>Start</strong> when stopped or errored.</li>
+      <li><strong>Stop</strong> when running.</li>
+      <li><strong>Show details</strong> always visible. Brings the main window forward and navigates to that project.</li>
+    </ul>
+    <p>
+      At the bottom of the tray there's <strong>Show Sail Manager</strong> (brings the window back) and <strong>Quit Sail Manager</strong> (full exit).
+    </p>
+  </section>
+
+  <section>
+    <h2 id="status-glyphs">Status glyphs</h2>
+    <p>Status is reflected with a glyph prefix on the project name:</p>
+    <ul class="bullets">
+      <li><code>●</code> Running.</li>
+      <li><code>◐</code> Transitioning (starting or stopping).</li>
+      <li><code>○</code> Stopped.</li>
+      <li><code>!</code> Errored.</li>
+    </ul>
+    <p>Project order is sorted by status group first, then alphabetical. Running projects float to the top.</p>
+  </section>
+
+  <section>
+    <h2 id="window-behavior">Closing vs quitting</h2>
+    <p>
+      Closing the main window doesn't quit. The tray stays alive, your auto-services keep
+      running, and the menu-bar icon stays put. Click "Show Sail Manager" in the tray (or
+      click the dock icon) to bring the window back.
+    </p>
+    <p>
+      To actually stop everything, click <strong>Quit Sail Manager</strong> in the tray menu. That triggers a clean shutdown of log streams and any background services the app spawned.
+    </p>
+  </section>
+</DocsLayout>

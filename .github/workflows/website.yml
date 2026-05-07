@@ -1,0 +1,69 @@
+name: Deploy website
+
+# Builds the marketing site (Astro) in ./website and publishes it to GitHub
+# Pages. Triggers on any push to main that touches the website folder, plus
+# manual dispatch from the Actions tab.
+#
+# Custom domain: ./website/public/CNAME contains "sailmanager.app". When DNS
+# is configured (CNAME record pointing to luukdahlmans.github.io for the apex
+# host, or four A records for the apex), Pages will serve the site there.
+# Until DNS is configured the site is reachable at the *.github.io URL.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'website/**'
+      - '.github/workflows/website.yml'
+  workflow_dispatch:
+
+# GitHub Pages requires these permissions for deploy-pages@v4.
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Don't run two deploys at once; cancel in-flight ones if a newer commit lands.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ./website
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: website/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build site
+        run: npm run build
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: ./website/dist
+
+  deploy:
+    name: Deploy
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

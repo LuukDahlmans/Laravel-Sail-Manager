@@ -1,0 +1,37 @@
+---
+import DocsLayout from '../../layouts/DocsLayout.astro';
+---
+
+<DocsLayout
+  slug="reset"
+  title="Reset application"
+  description="How to wipe Sail Manager state without losing your code or Docker volumes."
+>
+  <section>
+    <h2 id="what-it-does">What it does</h2>
+    <p>
+      Settings, then Danger zone, then "Reset application". Use this when you want a clean slate
+      without uninstalling the app.
+    </p>
+    <ul class="bullets">
+      <li>Stops every running project and any service-mode auto-commands.</li>
+      <li>Removes the Traefik and dnsmasq containers.</li>
+      <li>Removes <code>/etc/resolver/&lt;tld&gt;</code> (one-time sudo prompt).</li>
+      <li>Wipes the project list, history, auto-commands, and templates (templates reset to the seeded defaults).</li>
+    </ul>
+    <p>You'll get a confirmation modal before any of it happens. There's no undo.</p>
+  </section>
+
+  <section>
+    <h2 id="what-it-keeps">What it keeps</h2>
+    <ul class="bullets">
+      <li><strong>Your project folders.</strong> Source code stays where it is.</li>
+      <li><strong>Docker volumes.</strong> Your databases are fine.</li>
+      <li><strong>Your settings</strong> (theme, projects folder, editor pick) stay set unless you change them yourself.</li>
+    </ul>
+    <p>
+      Since your code stays put, the typical recovery flow after a reset is to use the
+      "Found N untracked projects" toast on next launch to re-import everything in one click.
+    </p>
+  </section>
+</DocsLayout>

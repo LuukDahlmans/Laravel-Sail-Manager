@@ -1,0 +1,76 @@
+---
+import DocsLayout from '../../layouts/DocsLayout.astro';
+---
+
+<DocsLayout
+  slug="tools"
+  title="Project detail tabs"
+  description="Overview, logs, shell, environment, database, run command, and history tabs explained."
+>
+  <section>
+    <h2 id="overview-tab">Overview</h2>
+    <p>The default landing tab when you click into a project. Shows:</p>
+    <ul class="bullets">
+      <li>Status, when the project was created, when it was last started.</li>
+      <li>PHP version, starter kit, and the list of enabled services with their host ports.</li>
+      <li>Quick actions: Open in browser, Open in editor, Open Terminal, Reveal in Finder.</li>
+      <li>Mailpit shortcut (opens the Mailpit UI on its allocated port).</li>
+      <li>TablePlus shortcut for MySQL (opens with the right DSN pre-filled).</li>
+    </ul>
+  </section>
+
+  <section>
+    <h2 id="logs-tab">Logs</h2>
+    <p>
+      Live <code>docker compose logs --follow</code> for the running containers. There's a
+      service filter dropdown at the top so you can isolate, say, just <code>laravel.test</code>
+      or just <code>mysql</code>. Lines have timestamps, ANSI colors are stripped, and auto-scroll
+      kicks in on new lines (you can pause that).
+    </p>
+    <p>The first time you open the tab the app fetches the last 200 lines, then switches to streaming.</p>
+  </section>
+
+  <section>
+    <h2 id="shell-tab">Shell</h2>
+    <p>
+      A real interactive shell inside the <code>laravel.test</code> container. Backed by a PTY,
+      so it handles things like Vim, top, and color output. Resizes when the window does.
+    </p>
+    <p>Useful for one-off shell commands without leaving the app.</p>
+  </section>
+
+  <section>
+    <h2 id="environment-tab">Environment</h2>
+    <p>
+      Shows the project's <code>.env</code> as a list of key-value pairs. Read-only. Useful for
+      quickly checking ports, the database URL, or the app key without opening your editor.
+    </p>
+  </section>
+
+  <section>
+    <h2 id="database-tab">Database</h2>
+    <p>
+      Shows the database DSN and a "Copy" button. If you have TablePlus installed, the
+      "Open in TablePlus" button passes the DSN directly so you don't need to retype anything.
+    </p>
+  </section>
+
+  <section>
+    <h2 id="run-command">Run command</h2>
+    <p>
+      One-shot shell from the UI. Type a command (e.g. <code>php artisan tinker</code>,
+      <code>php artisan db:seed</code>, <code>composer dump-autoload</code>), hit run, and the
+      output streams in real time. There's a Stop button if the command is taking too long.
+    </p>
+    <p>Works on running projects. The command runs inside <code>laravel.test</code>.</p>
+  </section>
+
+  <section>
+    <h2 id="history-tab">History</h2>
+    <p>
+      Timeline of what's happened with this project: created, started, stopped, errored,
+      imported, cloned. Up to 100 entries. Errored events include the message so you can see
+      what went wrong without digging through logs.
+    </p>
+  </section>
+</DocsLayout>

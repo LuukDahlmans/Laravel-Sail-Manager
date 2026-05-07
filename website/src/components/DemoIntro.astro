@@ -1,0 +1,102 @@
+---
+// Above-the-demo callout. Hand-drawn-feeling arrow + scribbly label so it
+// reads like an annotation, not a banner. The arrow points down/right so the
+// user's eye lands on the demo card.
+---
+
+<div class="demo-intro">
+  <div class="callout">
+    <span class="text">Try the demo here</span>
+    <svg
+      class="arrow"
+      viewBox="0 0 220 110"
+      width="220"
+      height="110"
+      aria-hidden="true"
+      fill="none"
+      stroke="currentColor"
+      stroke-width="2.4"
+      stroke-linecap="round"
+      stroke-linejoin="round"
+    >
+      <path
+        d="M 8 12 C 50 6, 110 14, 150 40 S 200 90, 196 100"
+        stroke-dasharray="280"
+        stroke-dashoffset="280"
+        class="arrow-path"
+      />
+      <path d="M 188 88 L 196 102 L 182 102" class="arrow-head" />
+    </svg>
+  </div>
+  <p class="sandbox-note" role="note">
+    Sandbox demo. Interactive but cosmetic. The real app does the actual Docker work.
+  </p>
+</div>
+
+<style>
+  .demo-intro {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 14px;
+    margin-bottom: 28px;
+  }
+  .callout {
+    position: relative;
+    display: inline-flex;
+    align-items: flex-start;
+    gap: 0;
+    color: var(--accent);
+  }
+  .text {
+    font-family: 'Caveat', 'Bradley Hand', 'Comic Sans MS', cursive;
+    font-size: 30px;
+    color: var(--accent);
+    transform: rotate(-4deg);
+    margin-top: 4px;
+    letter-spacing: 0.01em;
+    animation: wiggle 3.6s ease-in-out infinite;
+    transform-origin: 60% 60%;
+  }
+  .arrow {
+    margin-left: -8px;
+    margin-top: -10px;
+    color: var(--accent);
+    filter: drop-shadow(0 0 6px var(--accent-glow));
+  }
+  .arrow-path {
+    animation: draw 1.6s var(--ease) 0.3s forwards;
+  }
+  .arrow-head {
+    opacity: 0;
+    animation: fade-in 0.4s ease 1.5s forwards;
+  }
+  @keyframes draw {
+    to { stroke-dashoffset: 0; }
+  }
+  @keyframes fade-in {
+    to { opacity: 1; }
+  }
+
+  .sandbox-note {
+    font-size: 12px;
+    color: var(--text-faint);
+    text-align: center;
+    margin: 0;
+    padding: 5px 14px;
+    border: 1px dashed var(--border-strong);
+    border-radius: 999px;
+    background: var(--bg-1);
+  }
+
+  @media (max-width: 720px) {
+    .arrow { display: none; }
+    .text { transform: rotate(0); font-size: 26px; margin-top: 0; }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .text { animation: none; }
+    .arrow-path { animation: none; stroke-dashoffset: 0; }
+    .arrow-head { animation: none; opacity: 1; }
+  }
+</style>

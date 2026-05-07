@@ -1,0 +1,303 @@
+/* Mirror the app's design tokens 1:1 so the marketing site feels like an
+   extension of the product. The interactive demo on the landing page
+   re-uses these same variables, which is why they're declared up here. */
+:root {
+  --bg: #0c0c0e;
+  --bg-1: #111114;
+  --bg-2: #16161a;
+  --bg-3: #1d1d22;
+  --bg-4: #28282e;
+  --bg-elevated: #1a1a1f;
+  --sidebar-bg: linear-gradient(180deg, #131316 0%, #0e0e10 100%);
+  --border: rgba(255, 255, 255, 0.06);
+  --border-strong: rgba(255, 255, 255, 0.12);
+  --text: #f1f1f3;
+  --text-dim: #8e8e95;
+  --text-faint: #5a5a62;
+  --accent: #ff3a2e;
+  --accent-hover: #ff5246;
+  --accent-soft: rgba(255, 58, 46, 0.16);
+  --accent-glow: rgba(255, 58, 46, 0.32);
+  --success: #25c36c;
+  --success-soft: rgba(37, 195, 108, 0.16);
+  --success-glow: rgba(37, 195, 108, 0.30);
+  --warning: #ffb13a;
+  --warning-soft: rgba(255, 177, 58, 0.16);
+  --error: #ff5a52;
+  --error-soft: rgba(255, 90, 82, 0.16);
+  --info: #6aa9ff;
+  --info-soft: rgba(106, 169, 255, 0.16);
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
+  --shadow-card: 0 1px 0 rgba(255, 255, 255, 0.04) inset, 0 6px 22px rgba(0, 0, 0, 0.32);
+  --shadow-lg: 0 1px 0 rgba(255, 255, 255, 0.05) inset, 0 18px 48px rgba(0, 0, 0, 0.45);
+  --code-bg: #050506;
+  --code-text: #d0d0d0;
+  --grid-fade: radial-gradient(80% 60% at 50% 0%, rgba(255, 255, 255, 0.05) 0%, transparent 70%);
+
+  --radius: 10px;
+  --radius-sm: 6px;
+  --radius-lg: 14px;
+  --ease: cubic-bezier(0.32, 0.72, 0, 1);
+  --ease-quick: cubic-bezier(0.4, 0, 0.2, 1);
+  --max-w: 1180px;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+html {
+  scroll-behavior: smooth;
+  scroll-padding-top: 80px;
+}
+
+body {
+  font-family:
+    -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Inter',
+    'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  font-size: 14px;
+  line-height: 1.55;
+  color: var(--text);
+  background: var(--bg);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  font-synthesis: none;
+  overflow-x: hidden;
+  background-image:
+    radial-gradient(60% 40% at 12% 8%, var(--accent-soft) 0%, transparent 60%),
+    radial-gradient(80% 60% at 100% 0%, rgba(255, 255, 255, 0.04) 0%, transparent 70%);
+  background-attachment: fixed;
+}
+
+::selection { background: var(--accent-soft); color: var(--accent); }
+
+a { color: var(--text); text-decoration: none; transition: color 0.15s var(--ease-quick); }
+/* Exclude .btn from this rule. Otherwise an <a class="btn btn-primary"> hits
+   a:hover (specificity 0,0,1,1) which equals .btn-primary:hover, and the
+   color cascades to red — invisible against the red background. */
+a:not(.btn):hover { color: var(--accent); }
+
+h1, h2, h3, h4 {
+  font-weight: 650;
+  letter-spacing: -0.022em;
+  line-height: 1.1;
+  color: var(--text);
+}
+h1 { font-size: clamp(2.4rem, 5.2vw, 4rem); letter-spacing: -0.035em; }
+h2 { font-size: clamp(1.7rem, 3vw, 2.4rem); letter-spacing: -0.03em; }
+h3 { font-size: 1.05rem; }
+p { color: var(--text-dim); }
+
+code, pre {
+  font-family: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, monospace;
+}
+code {
+  background: var(--code-bg);
+  border: 1px solid var(--border);
+  padding: 0.15em 0.45em;
+  border-radius: 5px;
+  font-size: 0.88em;
+  color: var(--text);
+}
+pre {
+  background: var(--code-bg);
+  border: 1px solid var(--border);
+  padding: 1rem 1.25rem;
+  border-radius: var(--radius);
+  overflow-x: auto;
+  font-size: 0.82rem;
+  line-height: 1.55;
+  color: var(--code-text);
+}
+pre code { background: transparent; border: 0; padding: 0; }
+
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.08); border-radius: 5px; }
+::-webkit-scrollbar-thumb:hover { background: rgba(255, 255, 255, 0.16); }
+
+.container {
+  width: 100%;
+  max-width: var(--max-w);
+  margin: 0 auto;
+  padding: 0 1.5rem;
+}
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px;
+  border-radius: var(--radius-sm);
+  font-size: 13px;
+  font-weight: 500;
+  font-family: inherit;
+  border: 1px solid var(--border-strong);
+  background: var(--bg-3);
+  color: var(--text);
+  transition:
+    background 0.15s var(--ease-quick),
+    border-color 0.15s var(--ease-quick),
+    transform 0.08s var(--ease-quick),
+    box-shadow 0.15s var(--ease-quick);
+  white-space: nowrap;
+  cursor: pointer;
+}
+.btn:hover { background: var(--bg-4); }
+.btn:active:not(:disabled) { transform: translateY(0.5px); }
+
+.btn-primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: white;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.12),
+    0 1px 0 rgba(0, 0, 0, 0.12);
+}
+.btn-primary:hover {
+  background: var(--accent-hover);
+  color: white;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.12),
+    0 2px 8px var(--accent-glow),
+    0 1px 0 rgba(0, 0, 0, 0.12);
+}
+
+/* Reusable sheen overlay for primary CTAs. Adds a diagonal highlight that
+   sweeps across the button every few seconds. Apply alongside .btn-primary. */
+.btn-sheen {
+  position: relative;
+  overflow: hidden;
+  isolation: isolate;
+}
+.btn-sheen::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -60%;
+  width: 40%;
+  height: 100%;
+  background: linear-gradient(
+    120deg,
+    transparent 0%,
+    rgba(255, 255, 255, 0.22) 50%,
+    transparent 100%
+  );
+  transform: skewX(-20deg);
+  animation: sheen 4.5s ease-in-out infinite;
+  pointer-events: none;
+  z-index: -1;
+}
+@keyframes sheen {
+  0%   { left: -60%; }
+  60%  { left: 120%; }
+  100% { left: 120%; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .btn-sheen::after { animation: none; }
+}
+
+.btn-ghost {
+  background: transparent;
+  border-color: var(--border-strong);
+  color: var(--text-dim);
+}
+.btn-ghost:hover { background: var(--bg-3); color: var(--text); border-color: var(--border-strong); }
+
+.btn-lg {
+  padding: 11px 18px;
+  font-size: 14px;
+  border-radius: var(--radius);
+}
+
+.btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+section {
+  padding: 5rem 0;
+  position: relative;
+}
+@media (max-width: 720px) {
+  section { padding: 3.5rem 0; }
+}
+
+.eyebrow {
+  display: inline-block;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: var(--accent);
+  margin-bottom: 0.85rem;
+  padding: 4px 10px;
+  background: var(--accent-soft);
+  border-radius: 999px;
+  border: 1px solid var(--accent-soft);
+}
+
+.section-head {
+  text-align: center;
+  max-width: 720px;
+  margin: 0 auto 3rem;
+}
+.section-head p {
+  margin-top: 1rem;
+  font-size: 1.05rem;
+  line-height: 1.55;
+}
+
+.divider {
+  height: 1px;
+  background: linear-gradient(90deg, transparent, var(--border-strong), transparent);
+  border: 0;
+  max-width: var(--max-w);
+  margin: 0 auto;
+}
+
+.skip-link {
+  position: absolute;
+  top: -40px; left: 0;
+  background: var(--accent);
+  color: white;
+  padding: 0.5rem 1rem;
+  z-index: 100;
+  font-weight: 600;
+}
+.skip-link:focus { top: 0; }
+
+/* Reveal-on-scroll animation. Elements with .reveal start invisible and fade
+   up when they enter the viewport. Driven by IntersectionObserver in Layout.
+   Per-element stagger via the --delay custom property (e.g. style="--delay: 80ms").
+
+   First-paint elements (anything in the hero) are revealed immediately on
+   load via the .reveal-now class so we don't waste a paint cycle. */
+.reveal {
+  opacity: 0;
+  transform: translateY(14px);
+  transition:
+    opacity 0.7s var(--ease) var(--delay, 0ms),
+    transform 0.7s var(--ease) var(--delay, 0ms);
+  will-change: opacity, transform;
+}
+.reveal.in,
+.reveal-now {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .reveal,
+  .reveal-now {
+    opacity: 1 !important;
+    transform: none !important;
+    transition: none !important;
+    animation: none !important;
+  }
+}
+
+/* Subtle floating animation used for the demo arrow + a couple of accents. */
+@keyframes float-y {
+  0%, 100% { transform: translateY(0); }
+  50%      { transform: translateY(-6px); }
+}
+@keyframes wiggle {
+  0%, 100% { transform: rotate(-2deg); }
+  50%      { transform: rotate(2deg); }
+}

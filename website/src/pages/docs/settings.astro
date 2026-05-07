@@ -1,0 +1,57 @@
+---
+import DocsLayout from '../../layouts/DocsLayout.astro';
+---
+
+<DocsLayout
+  slug="settings"
+  title="Settings"
+  description="Theme, projects folder, editor pick, local URLs, and the danger zone."
+>
+  <section>
+    <h2 id="appearance">Appearance</h2>
+    <p>
+      Light, Dark, or System (follows macOS appearance). The native window's traffic-light
+      buttons re-tint to match so they stay visible.
+    </p>
+  </section>
+
+  <section>
+    <h2 id="local-urls">Local URLs</h2>
+    <p>
+      Toggle, TLD input, HTTPS toggle, and a Resync button. Covered in detail under
+      <a href="/docs/local-urls">Local URLs</a>.
+    </p>
+  </section>
+
+  <section>
+    <h2 id="projects-folder">Projects folder</h2>
+    <p>
+      Where new projects get scaffolded. <code>~</code> expands. The folder is created if it
+      doesn't exist. Existing projects don't move when you change this; only new ones.
+    </p>
+  </section>
+
+  <section>
+    <h2 id="editor">Editor</h2>
+    <p>
+      Pick from PhpStorm, VS Code, Cursor, or Zed. Used by the "Open in editor" button on every project.
+    </p>
+  </section>
+
+  <section>
+    <h2 id="updates">Updates</h2>
+    <p>
+      On launch the app checks for a new release. If one's available, you'll see an
+      "Update available" toast with an "Install &amp; restart" button. The download verifies a
+      signature so you don't get a tampered binary.
+    </p>
+    <p>Updates are opt-in per click. Nothing installs without your action.</p>
+  </section>
+
+  <section>
+    <h2 id="danger-zone">Danger zone</h2>
+    <p>
+      "Reset application" wipes the app's state. Covered in <a href="/docs/reset">Reset application</a>.
+    </p>
+  </section>
+</DocsLayout>

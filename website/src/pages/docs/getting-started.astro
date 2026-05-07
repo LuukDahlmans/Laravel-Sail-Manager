@@ -1,0 +1,67 @@
+---
+import DocsLayout from '../../layouts/DocsLayout.astro';
+---
+
+<DocsLayout
+  slug="getting-started"
+  title="Getting started"
+  description="Install Sail Manager, walk through the first-run wizard, and learn where the app keeps its data."
+>
+  <section>
+    <h2 id="requirements">Requirements</h2>
+    <p>Sail Manager is a macOS app. To use it you need:</p>
+    <ul class="bullets">
+      <li><strong>macOS 12 or newer.</strong> The app runs as a universal binary, so Apple Silicon and Intel both work.</li>
+      <li><strong>Docker Desktop.</strong> The app shells out to <code>docker compose</code>, so Docker has to be installed and running. If it's not, the sidebar shows a "Start Docker" button.</li>
+      <li><strong>Nothing else.</strong> No PHP, Composer, or Node installed locally. Sail Manager runs everything in Docker.</li>
+    </ul>
+    <div class="note">
+      Optional but nice: Git for cloning repos, your editor of choice (PhpStorm, VS Code, Cursor, or Zed) so the "Open in editor" button works.
+    </div>
+  </section>
+
+  <section>
+    <h2 id="install">Install</h2>
+    <ol class="steps">
+      <li>Grab the latest <code>.dmg</code> from the <a href="https://github.com/LuukDahlmans/Laravel-Sail-Manager/releases" target="_blank" rel="noopener">releases page</a>.</li>
+      <li>Open it and drag the app into Applications.</li>
+      <li>Launch it. macOS may ask you to confirm the first time.</li>
+    </ol>
+    <p>
+      If you'd rather build from source, see the snippet at the bottom of the
+      <a href="/#download">download section</a> on the home page.
+    </p>
+  </section>
+
+  <section>
+    <h2 id="first-run">First-run wizard</h2>
+    <p>
+      The first time you launch the app, you'll go through a short wizard. You can skip it,
+      but it sets up the parts of the system that need a one-time configure.
+    </p>
+    <ol class="steps">
+      <li><strong>Welcome.</strong> Quick intro and a link to GitHub.</li>
+      <li><strong>System check.</strong> The app probes Docker and lists what it found. Required tools (Docker) gate the next step. Recommended tools (Git, Composer, Node, Laravel CLI) get a status badge but don't block. Optional tools (Oh My Zsh, Herd, Valet) are listed for context.</li>
+      <li><strong>Local URLs.</strong> Toggle whether you want <code>http://shop.test</code>-style URLs and pick the TLD. This is the only step that asks for your password (once, to write <code>/etc/resolver/&lt;tld&gt;</code>). Skipping is fine; you can enable it later.</li>
+      <li><strong>Projects folder.</strong> Pick where new projects get created. Defaults to <code>~/SailProjects</code>.</li>
+      <li><strong>Done.</strong> Optional checkbox to open the "Create project" form right after finishing.</li>
+    </ol>
+    <p>
+      If the app finds existing Sail-looking folders inside your projects directory that aren't registered yet, it shows an "Import all" toast you can click to pull them in.
+    </p>
+  </section>
+
+  <section>
+    <h2 id="data-locations">Where data lives</h2>
+    <p>Sail Manager stores its own state in the standard macOS app data directory:</p>
+    <pre><code>~/Library/Application Support/com.laraveldevtool.app/
+├── state.db          SQLite: projects, ports, history, auto-commands
+├── settings.json     Theme, local URL TLD, editor pick, projects root
+├── templates.json    Project templates
+├── proxy/            Generated Traefik dynamic config
+└── dns/              Generated dnsmasq config</code></pre>
+    <p>
+      Project source code lives in your projects folder (default <code>~/SailProjects</code>). Containers and volumes live wherever Docker stores them.
+    </p>
+  </section>
+</DocsLayout>

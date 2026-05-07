@@ -1,0 +1,57 @@
+---
+import DocsLayout from '../../layouts/DocsLayout.astro';
+---
+
+<DocsLayout
+  slug="services"
+  title="Built-in services"
+  description="The 13 Sail services Sail Manager wires into the create form, plus custom services."
+>
+  <section>
+    <h2 id="service-list">Full service list</h2>
+    <p>13 services are wired into the create form, mapped to Sail's defaults:</p>
+    <div class="service-grid">
+      <div class="service-cat">
+        <h4>Database</h4>
+        <ul class="bullets"><li>MySQL</li><li>PostgreSQL</li><li>MariaDB</li><li>MongoDB</li></ul>
+      </div>
+      <div class="service-cat">
+        <h4>Cache</h4>
+        <ul class="bullets"><li>Redis</li><li>Valkey</li><li>Memcached</li></ul>
+      </div>
+      <div class="service-cat">
+        <h4>Search</h4>
+        <ul class="bullets"><li>Meilisearch</li><li>Typesense</li></ul>
+      </div>
+      <div class="service-cat">
+        <h4>Mail</h4>
+        <ul class="bullets"><li>Mailpit</li></ul>
+      </div>
+      <div class="service-cat">
+        <h4>Storage</h4>
+        <ul class="bullets"><li>MinIO</li></ul>
+      </div>
+      <div class="service-cat">
+        <h4>Tools</h4>
+        <ul class="bullets"><li>Selenium</li><li>Soketi</li></ul>
+      </div>
+    </div>
+    <p>
+      Each one gets its own host port, allocated automatically and written to <code>.env</code>.
+      Mailpit and MinIO get two ports each (one for SMTP/storage, one for the UI).
+    </p>
+  </section>
+
+  <section>
+    <h2 id="custom-services">Custom services</h2>
+    <p>
+      The "Custom services" field on the create form lets you add anything outside the built-in 13.
+      Names are added as-is to the generated compose file. You'll be on the hook for the compose
+      changes (ports, image, env vars) since Sail Manager doesn't know about them.
+    </p>
+    <div class="note">
+      Custom services don't get auto-port allocation. If your custom service needs a host port,
+      add it manually to the compose file or set the appropriate env var yourself.
+    </div>
+  </section>
+</DocsLayout>

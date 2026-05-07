@@ -1,0 +1,62 @@
+---
+import DocsLayout from '../../layouts/DocsLayout.astro';
+---
+
+<DocsLayout
+  slug="auto-commands"
+  title="Auto-commands"
+  description="Run Horizon, queues, schedulers, npm dev, and any other command automatically when a project starts."
+>
+  <section>
+    <h2 id="modes">Service vs once mode</h2>
+    <p>Auto-commands fire every time a project starts. Two run modes:</p>
+    <ul class="bullets">
+      <li><strong>Service mode</strong> runs detached with <code>-d</code> and stays alive until containers stop. Use this for long-running things: Horizon, queue workers, the schedule worker, Vite dev server, Reverb, Pulse worker.</li>
+      <li><strong>Once mode</strong> runs blocking, waits for it to exit, and continues. Use this for one-off setup: extra migrations, <code>storage:link</code>, <code>cache:clear</code>, etc.</li>
+    </ul>
+    <div class="note">
+      Service-mode commands get killed cleanly when you stop the project, so you don't need to babysit them.
+    </div>
+  </section>
+
+  <section>
+    <h2 id="presets">Built-in presets</h2>
+    <p>
+      The Add menu has presets grouped by purpose. Click any to add it pre-configured. You can
+      still edit the label, command, or mode after.
+    </p>
+    <ul class="bullets">
+      <li><strong>Workers:</strong> Horizon, Queue worker, Schedule worker, Reverb, Pulse worker.</li>
+      <li><strong>Frontend:</strong> Vite dev server, Bun dev.</li>
+      <li><strong>Tooling:</strong> Pail (live logs), Telescope publish.</li>
+      <li><strong>Maintenance:</strong> Storage link, Cache clear, Optimize clear.</li>
+    </ul>
+  </section>
+
+  <section>
+    <h2 id="custom">Custom commands</h2>
+    <p>
+      You can add anything. The app accepts <code>sail artisan ...</code>,
+      <code>./vendor/bin/sail ...</code>, or raw shell strings; it strips the Sail prefix and
+      executes the rest with <code>docker compose exec laravel.test bash -lc</code>. Each
+      command has its own log tab so you can see output independently.
+    </p>
+    <h3>Per-command fields</h3>
+    <ul class="bullets">
+      <li><strong>Label.</strong> Shown in the list and the log tab.</li>
+      <li><strong>Command.</strong> The shell string. <code>sail artisan</code> prefixes are normalized.</li>
+      <li><strong>Run mode.</strong> Once or service.</li>
+      <li><strong>Enabled.</strong> Skip without deleting.</li>
+      <li><strong>Order.</strong> Drag to reorder; once-mode commands run in the order shown.</li>
+    </ul>
+  </section>
+
+  <section>
+    <h2 id="run-now">Run all now</h2>
+    <p>
+      The "Run all now" button triggers the full auto-command sequence on demand without
+      restarting the project. Disabled commands are skipped. Useful when you want to kick off
+      Horizon and Vite without bouncing the containers.
+    </p>
+  </section>
+</DocsLayout>

@@ -1,0 +1,105 @@
+---
+const faqs = [
+  {
+    q: "How is this different from Laravel Valet?",
+    a: "Valet runs PHP natively on your Mac. Sail Manager runs the actual Sail Docker stack. Same containers your CI uses, same MySQL/Redis/Mailpit your team is on. If it works locally, it works in production. The tradeoff: a little more RAM, a lot less drift.",
+  },
+  {
+    q: "Does it touch my compose.yaml?",
+    a: "No. Sail reads everything it needs from .env, and that's the only file Sail Manager writes to. Pull teammate changes, upgrade Sail, switch branches. Nothing conflicts.",
+  },
+  {
+    q: "Will it work with a project I already have?",
+    a: "Yes. There's an Import option. Point it at the folder, it validates the compose file, reads the current ports out of .env, and registers the project. Takes about a second.",
+  },
+  {
+    q: "Apple Silicon?",
+    a: "Yes. The release ships as a universal binary, so the same DMG runs on M-series and Intel Macs.",
+  },
+  {
+    q: "Is it really free?",
+    a: "Yes. MIT license, no signup, no telemetry, no upsell. Source is on GitHub.",
+  },
+  {
+    q: "Is this an official Laravel project?",
+    a: "No. It's a community side project. \"Laravel\" and \"Laravel Sail\" are trademarks of Taylor Otwell.",
+  },
+];
+
+const faqJsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'FAQPage',
+  mainEntity: faqs.map((f) => ({
+    '@type': 'Question',
+    name: f.q,
+    acceptedAnswer: { '@type': 'Answer', text: f.a },
+  })),
+};
+---
+
+<section id="faq" aria-labelledby="faq-title">
+  <div class="container">
+    <div class="section-head reveal">
+      <span class="eyebrow">FAQ</span>
+      <h2 id="faq-title">Things people ask first.</h2>
+    </div>
+
+    <div class="faq-list">
+      {faqs.map((f, i) => (
+        <details class="faq reveal" style={`--delay: ${i * 40}ms`}>
+          <summary>{f.q}</summary>
+          <p>{f.a}</p>
+        </details>
+      ))}
+    </div>
+  </div>
+
+  <script type="application/ld+json" set:html={JSON.stringify(faqJsonLd)} />
+</section>
+
+<style>
+  .faq-list {
+    max-width: 760px;
+    margin: 0 auto;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+  .faq {
+    background: var(--bg-2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    overflow: hidden;
+    transition: background 0.2s var(--ease-quick), border-color 0.2s var(--ease-quick);
+  }
+  .faq:hover { background: var(--bg-3); border-color: var(--border-strong); }
+  .faq summary {
+    cursor: pointer;
+    padding: 16px 20px;
+    font-weight: 650;
+    font-size: 14px;
+    letter-spacing: -0.015em;
+    color: var(--text);
+    list-style: none;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    user-select: none;
+  }
+  .faq summary::-webkit-details-marker { display: none; }
+  .faq summary::after {
+    content: '+';
+    color: var(--accent);
+    font-size: 1.25rem;
+    line-height: 1;
+    transition: transform 0.2s ease;
+    margin-left: 12px;
+  }
+  .faq[open] summary::after { content: '−'; }
+  .faq p {
+    padding: 0 20px 18px;
+    line-height: 1.65;
+    font-size: 13.5px;
+    color: var(--text-dim);
+  }
+</style>

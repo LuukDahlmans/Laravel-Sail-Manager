@@ -1,0 +1,80 @@
+---
+import DocsLayout from '../../layouts/DocsLayout.astro';
+---
+
+<DocsLayout
+  slug="troubleshooting"
+  title="Troubleshooting"
+  description="Fixes for common issues: Docker not responding, port conflicts, broken local URLs, fresh-project 500s, and more."
+>
+  <section>
+    <h2 id="docker-down">Docker not responding</h2>
+    <p>
+      The sidebar shows red and a <strong>Start Docker</strong> button. The app uses
+      <code>docker desktop start --detach</code> first (Docker 4.30+ has this CLI command,
+      and it un-pauses a paused engine), then falls back to <code>open -a Docker</code>.
+      Allow 30 to 60 seconds for the daemon to come up.
+    </p>
+    <p>
+      If <code>docker info</code> works in your terminal but the app says Docker is down,
+      the engine might be paused (Docker Desktop, then Resources, then Pause). Resume it.
+    </p>
+  </section>
+
+  <section>
+    <h2 id="fresh-500s">500s on a fresh project</h2>
+    <p>
+      Almost always a missing <code>sessions</code> table. Sail Manager runs <code>php artisan
+      migrate --force</code> automatically after start, so this should be rare. If it
+      happens, check the auto-command logs for migration errors and run <strong>Run command</strong>,
+      then <code>php artisan migrate</code> manually.
+    </p>
+  </section>
+
+  <section>
+    <h2 id="port-conflicts">Port conflicts</h2>
+    <p>
+      Something else is bound to one of the host ports. Stop the conflicting service, or
+      restart Docker (sometimes a previous Sail process holds a port). The error message
+      will tell you which port is in trouble.
+    </p>
+    <div class="note">
+      Sail Manager probes both IPv4 and IPv6 wildcards before assigning a port, so internal
+      conflicts are rare. External services (Apache, Nginx, Postgres installed via Homebrew)
+      are the usual culprits.
+    </div>
+  </section>
+
+  <section>
+    <h2 id="local-urls-broken">Local URLs not loading</h2>
+    <p>
+      Open Settings and check the Local URLs status panel. It runs five checks:
+    </p>
+    <ul class="bullets">
+      <li>Resolver file present at <code>/etc/resolver/&lt;tld&gt;</code></li>
+      <li>dnsmasq container running</li>
+      <li>Traefik proxy container running</li>
+      <li>Proxy port (80 or your configured port) bound</li>
+      <li>DNS actually resolving queries</li>
+    </ul>
+    <p>The panel tells you which one failed. Click <strong>Resync</strong> to rebuild everything.</p>
+  </section>
+
+  <section>
+    <h2 id="orphans">Untracked projects</h2>
+    <p>
+      The app spotted folders inside your projects directory that look like Sail projects
+      but aren't registered (probably because you cloned them outside the app, or imported a
+      backup). Click <strong>Import all</strong> in the toast and they'll show up in the list.
+    </p>
+  </section>
+
+  <section>
+    <h2 id="shell-echo">Shell echoes weird characters</h2>
+    <p>
+      An older bug caused the shell tab to echo <code>ggggg…</code> on connection due to
+      missing terminal type forwarding. Update to the latest release — the fix sets
+      <code>TERM=xterm-256color</code> properly.
+    </p>
+  </section>
+</DocsLayout>

@@ -1,0 +1,86 @@
+---
+const steps = [
+  {
+    n: '01',
+    title: 'Drop the .dmg in Applications',
+    body: "You need Docker Desktop installed. That's the only prerequisite. No Homebrew, no PHP, no Composer.",
+  },
+  {
+    n: '02',
+    title: 'Add a project',
+    body: "Scaffold a new Laravel + Sail project, clone one from Git, or import a folder you already have. Ports get assigned, .env gets written.",
+  },
+  {
+    n: '03',
+    title: 'Hit Start',
+    body: "Containers come up, migrations run, your auto-commands fire, and shop.test resolves to your project. You're already working.",
+  },
+];
+---
+
+<section id="how-it-works" aria-labelledby="how-title">
+  <div class="container">
+    <div class="section-head reveal">
+      <span class="eyebrow">Setup</span>
+      <h2 id="how-title">Three steps. No config files.</h2>
+    </div>
+
+    <ol class="steps">
+      {steps.map((s, i) => (
+        <li class="step reveal" style={`--delay: ${i * 80}ms`}>
+          <span class="num">{s.n}</span>
+          <h3>{s.title}</h3>
+          <p>{s.body}</p>
+        </li>
+      ))}
+    </ol>
+  </div>
+</section>
+
+<style>
+  .steps {
+    list-style: none;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 12px;
+    counter-reset: step;
+  }
+  .step {
+    background: var(--bg-2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 24px;
+    position: relative;
+    transition: background 0.2s var(--ease-quick), border-color 0.2s var(--ease-quick), transform 0.2s var(--ease-quick);
+  }
+  .step:hover {
+    background: var(--bg-3);
+    border-color: var(--border-strong);
+    transform: translateY(-2px);
+  }
+  .num {
+    display: inline-block;
+    font-family: ui-monospace, 'SF Mono', monospace;
+    font-size: 11px;
+    color: var(--accent);
+    background: var(--accent-soft);
+    box-shadow: 0 0 0 1px var(--accent-soft) inset;
+    padding: 3px 8px;
+    border-radius: 5px;
+    letter-spacing: 0.06em;
+    margin-bottom: 0.85rem;
+    font-weight: 600;
+  }
+  .step h3 {
+    font-size: 15px;
+    font-weight: 650;
+    letter-spacing: -0.015em;
+    margin-bottom: 0.4rem;
+    color: var(--text);
+  }
+  .step p {
+    font-size: 13px;
+    line-height: 1.55;
+    color: var(--text-dim);
+  }
+</style>

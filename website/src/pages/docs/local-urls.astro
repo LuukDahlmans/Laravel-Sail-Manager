@@ -1,0 +1,64 @@
+---
+import DocsLayout from '../../layouts/DocsLayout.astro';
+---
+
+<DocsLayout
+  slug="local-urls"
+  title="Local URLs"
+  description="How the .test domain system works, how to enable it, and what to do when it breaks."
+>
+  <section>
+    <h2 id="how-local-urls-work">How it works</h2>
+    <p>
+      With local URLs on, you visit <code>http://shop.test</code> instead of
+      <code>http://localhost:8081</code>. Three pieces make it work:
+    </p>
+    <ol class="steps">
+      <li>A <strong>Traefik</strong> container on host port 80 with a file provider. For each project, there's a route mapping <code>Host(&lt;name&gt;.&lt;tld&gt;)</code> to <code>host.docker.internal:&lt;APP_PORT&gt;</code>.</li>
+      <li>A <strong>dnsmasq</strong> container on <code>127.0.0.1:5354</code> answering <code>address=/.&lt;tld&gt;/127.0.0.1</code>, so anything ending in <code>.&lt;tld&gt;</code> resolves to your machine.</li>
+      <li>A small file at <strong><code>/etc/resolver/&lt;tld&gt;</code></strong> that tells macOS to use that dnsmasq container for any lookup ending in <code>.&lt;tld&gt;</code>. Port 5354 is used so it doesn't collide with Herd or Valet on :53.</li>
+    </ol>
+    <p>
+      Step 3 is the only one that needs your password. Once. After that, every project you
+      ever create gets its own <code>.&lt;tld&gt;</code> URL with no further prompts.
+    </p>
+  </section>
+
+  <section>
+    <h2 id="enable-local-urls">Enable or change the TLD</h2>
+    <p>Go to Settings, then Local URLs.</p>
+    <ul class="bullets">
+      <li><strong>Enable toggle.</strong> Turning it on installs the Traefik + dnsmasq containers and writes the resolver file. The first time, you'll get one macOS password prompt.</li>
+      <li><strong>TLD input.</strong> Defaults to <code>sail</code>. You can use any short alphanumeric string. <code>test</code> is the most common choice. Avoid real TLDs (<code>com</code>, <code>net</code>) since they'd hijack real DNS.</li>
+      <li><strong>Resync.</strong> Rebuilds the proxy config for every project, restarts the containers, and re-checks the resolver. Useful if something feels off.</li>
+    </ul>
+    <p>Disabling local URLs tears all of that down. Project URLs fall back to <code>localhost:&lt;port&gt;</code>.</p>
+  </section>
+
+  <section>
+    <h2 id="https">HTTPS</h2>
+    <p>
+      With the HTTPS toggle on, the app generates a local certificate authority, installs it
+      into your macOS login keychain, and produces a wildcard cert for <code>*.&lt;tld&gt;</code>.
+      Traefik switches to serving on <code>:443</code>, and your browser stops complaining.
+    </p>
+    <p>
+      The CA is local to your machine and only trusted by your account. Nothing leaves the laptop.
+    </p>
+  </section>
+
+  <section>
+    <h2 id="local-urls-troubleshooting">When things break</h2>
+    <p>
+      If a container got removed or the resolver file went missing, the app notices and surfaces a
+      "Local URLs need repair" toast. Click <strong>Fix it</strong> and it runs the full
+      resync (which may need your password to re-write the resolver file).
+    </p>
+    <p>Common causes:</p>
+    <ul class="bullets">
+      <li><strong>Docker Desktop was reset.</strong> All containers are gone. Run Resync.</li>
+      <li><strong>Port 80 already in use</strong> by Apache, Nginx, Herd, or another service. Stop the conflicting service or change Traefik's port (Resync detects the conflict).</li>
+      <li><strong>Stale resolver file</strong> from a previous install of Valet or Herd. Settings, then Resync rewrites it.</li>
+    </ul>
+  </section>
+</DocsLayout>
