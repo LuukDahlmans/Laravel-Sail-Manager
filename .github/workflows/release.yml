@@ -1,7 +1,7 @@
 name: Release
 
 # Triggers:
-#   - push to main: continuous prerelease, auto-versioned per commit. Skips
+#   - push to main: continuous release, auto-versioned per commit. Skips
 #     docs / website / template-only changes so we don't burn macOS runner
 #     minutes on commits that can't have changed the binary.
 #   - push of a v* tag: draft release for curated, manually-published versions.
@@ -29,11 +29,12 @@ concurrency:
 
 jobs:
   build:
-    name: Build macOS bundle
+    name: Build, sign, notarize, and publish macOS bundle
     runs-on: macos-latest
-    timeout-minutes: 45
+    # Notarization can take 5-15 min, so we budget generously.
+    timeout-minutes: 60
 
-    # softprops/action-gh-release needs write access to releases.
+    # tauri-action needs write access to create the GitHub Release.
     permissions:
       contents: write
 
@@ -41,7 +42,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           # Full history needed so we can compute commit count for the
-          # synthetic prerelease tag.
+          # synthetic per-commit version.
           fetch-depth: 0
 
       - name: Set up Node
@@ -125,35 +126,31 @@ jobs:
           sed -i.bak -E 's/^version = "[^"]*"/version = "'"${BUNDLE_VERSION}"'"/' src-tauri/Cargo.toml
           rm src-tauri/Cargo.toml.bak
           echo "Patched in-source version to ${BUNDLE_VERSION}"
-          grep -E '^"version"|^version = ' src-tauri/Cargo.toml package.json | head -5
-          node -p "require('./src-tauri/tauri.conf.json').version"
 
       - name: Install npm deps
         run: npm ci
 
-      - name: Build universal binary
-        # Code-signing + notarization env vars stay commented out until the
-        # Apple Developer Program enrollment is complete and the secrets are
-        # added to the repo. See RELEASE.md for the upgrade path.
-        # env:
-        #   APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
-        #   APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
-        #   APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
-        #   APPLE_ID: ${{ secrets.APPLE_ID }}
-        #   APPLE_PASSWORD: ${{ secrets.APPLE_ID_PASSWORD }}
-        #   APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-        run: npm run tauri build -- --target universal-apple-darwin
-
-      - name: Publish release
-        uses: softprops/action-gh-release@v2
+      - name: Build, sign, notarize, and publish
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Apple code-signing: tauri-action imports the cert into a temp
+          # keychain, signs the .app with hardened runtime + entitlements,
+          # then submits to Apple's notary service and staples the ticket.
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          # Tauri updater signing: signs the .app.tar.gz update payload so
+          # the running app verifies it before installing. Key was generated
+          # without a password, so TAURI_SIGNING_PRIVATE_KEY_PASSWORD is omitted.
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
         with:
-          tag_name: ${{ steps.version.outputs.tag }}
-          name: ${{ steps.version.outputs.name }}
-          draft: ${{ steps.version.outputs.draft }}
+          tagName: ${{ steps.version.outputs.tag }}
+          releaseName: ${{ steps.version.outputs.name }}
+          releaseDraft: ${{ steps.version.outputs.draft }}
           prerelease: ${{ steps.version.outputs.prerelease }}
-          generate_release_notes: true
-          # The .app.tar.gz updater bundle only exists once the Tauri updater
-          # signing key is configured. Add it back to this glob list when
-          # signing is wired up. Until then, ship the DMG only.
-          files: |
-            src-tauri/target/universal-apple-darwin/release/bundle/dmg/*.dmg
+          releaseBody: 'See the assets to download and install this version.'
+          args: --target universal-apple-darwin
