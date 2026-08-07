@@ -1,4 +1,5 @@
 mod commands;
+mod compose_audit;
 mod dependencies;
 mod dnsmasq;
 mod error;
@@ -7,6 +8,7 @@ mod import;
 mod log_stream;
 mod models;
 mod one_shot;
+mod persist;
 mod ports;
 mod proxy;
 mod resolver;
@@ -50,12 +52,18 @@ fn augment_path() {
     let current = std::env::var("PATH").unwrap_or_default();
     let mut seen: HashSet<String> = HashSet::new();
     let mut parts: Vec<String> = Vec::new();
-    for p in extras.iter().map(|s| s.to_string()).chain(
-        current
-            .split(':')
-            .filter(|s| !s.is_empty())
-            .map(|s| s.to_string()),
-    ) {
+    // Inherited PATH first (so system dirs like /usr/bin win), THEN the extras.
+    // Homebrew's /usr/local/bin is writable by the admin user, so prepending it
+    // would let a dropped binary there shadow system tools we shell out to
+    // (git, id, cp, …). Appending keeps those resolving from /usr/bin while
+    // still making docker/node/composer discoverable for GUI-launched apps
+    // whose PATH would otherwise be the bare /usr/bin:/bin.
+    for p in current
+        .split(':')
+        .filter(|s| !s.is_empty())
+        .map(|s| s.to_string())
+        .chain(extras.iter().map(|s| s.to_string()))
+    {
         if seen.insert(p.clone()) {
             parts.push(p);
         }
@@ -153,6 +161,7 @@ pub fn run() {
             commands::open_in_editor,
             commands::set_editor,
             commands::get_project_logs,
+            commands::get_project_env,
             commands::start_log_stream,
             commands::stop_log_stream,
             commands::import_project,
@@ -197,7 +206,7 @@ pub fn run() {
                     if let Some(state) = app_handle.try_state::<AppState>() {
                         if let Ok(projects) = state.store.list() {
                             for p in projects {
-                                sail::stop_auto_services(&p.id).await;
+                                sail::stop_auto_services(&p).await;
                             }
                         }
                     }

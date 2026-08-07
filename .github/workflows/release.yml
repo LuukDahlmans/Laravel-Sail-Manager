@@ -130,6 +130,19 @@ jobs:
       - name: Install npm deps
         run: npm ci
 
+      # Gate the release on the same checks CI runs. release.yml triggers on the
+      # same push as ci.yml but is an independent workflow, so without this a
+      # commit that merely COMPILES could publish (and auto-update every user)
+      # with failing tests or lints. Fail here BEFORE signing/publishing.
+      - name: Gate release on type-check, tests, and lints
+        run: npm run check
+
+      - name: Gate release on cargo test + clippy
+        working-directory: src-tauri
+        run: |
+          cargo test --all-targets
+          cargo clippy --all-targets -- -D warnings
+
       - name: Build, sign, notarize, and publish
         uses: tauri-apps/tauri-action@v0
         env:

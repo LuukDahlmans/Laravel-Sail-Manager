@@ -32,12 +32,38 @@
   const isRunning = $derived(project?.status === 'running');
   const isBusy = $derived(project?.status === 'starting' || project?.status === 'stopping');
 
+  // While the project is in the error state, surface the most recent recorded
+  // failure as a banner. WHY: when `compose up` fails before creating any
+  // containers, the Logs tab is empty — without this the only trace of the
+  // error is a transient toast.
+  let lastErrorDetail = $state<string | null>(null);
+  $effect(() => {
+    if (project?.status !== 'error') {
+      lastErrorDetail = null;
+      return;
+    }
+    projectStore
+      .listHistory(project.id, 10)
+      .then((entries) => {
+        lastErrorDetail = entries.find((e) => e.kind === 'errored')?.detail ?? null;
+      })
+      .catch(() => {
+        lastErrorDetail = null;
+      });
+  });
+
   async function toggleStartStop() {
     if (!project || isBusy) return;
-    if (isRunning) {
-      await projectStore.stop(project.id);
-    } else {
-      await projectStore.start(project.id);
+    // Errors are surfaced + status reconciled inside the store; catch the
+    // rethrow so this handler doesn't produce an uncaught rejection.
+    try {
+      if (isRunning) {
+        await projectStore.stop(project.id);
+      } else {
+        await projectStore.start(project.id);
+      }
+    } catch {
+      // handled in the store
     }
   }
 
@@ -64,7 +90,12 @@
     const local = projectStore.localUrlFor(project);
     const fallback = appPort ? `http://localhost:${appPort.host}` : null;
     const url = local ?? fallback;
-    if (url) await openUrl(url);
+    if (!url) return;
+    try {
+      await openUrl(url);
+    } catch (e) {
+      projectStore.reportError(`Could not open ${url}: ${e}`);
+    }
   }
 
   async function revealInFinder() {
@@ -86,7 +117,40 @@
   }
 
   const appPort = $derived(project?.ports.find((p) => p.service === 'app'));
-  const mysqlPort = $derived(project?.ports.find((p) => p.service === 'mysql'));
+  // Any relational DB engine, not just MySQL — imported projects may run
+  // Postgres/MariaDB/MongoDB.
+  const dbPort = $derived(
+    project?.ports.find((p) =>
+      ['mysql', 'pgsql', 'mariadb', 'mongodb'].includes(p.service),
+    ),
+  );
+
+  // The project's REAL .env (read from disk by the backend), used by the
+  // Environment and Database tabs so imported projects show working values
+  // instead of Sail-default guesses. Refetched whenever the project changes.
+  type ProjectEnv = {
+    raw: string;
+    dbConnection: string | null;
+    dbHost: string | null;
+    dbPort: string | null;
+    dbDatabase: string | null;
+    dbUsername: string | null;
+    dbPassword: string | null;
+  };
+  let projectEnv = $state<ProjectEnv | null>(null);
+  $effect(() => {
+    const pid = id;
+    if (!pid) return;
+    projectEnv = null;
+    projectStore
+      .getProjectEnv(pid)
+      .then((e) => {
+        if (id === pid) projectEnv = e;
+      })
+      .catch(() => {
+        // Non-fatal: tabs fall back to derived defaults.
+      });
+  });
 
   const editorLabels: Record<string, string> = {
     phpstorm: 'PhpStorm',
@@ -125,31 +189,31 @@
   let composeServices = $state<string[]>([]);
   let logFilter = $state<string | null>(null);
 
+  // Own the log stream from a single effect keyed on the STABLE route id (not
+  // the project object) plus the tab and filter. Keying on `project` restarted
+  // the stream on every status transition — e.g. right as the project went
+  // starting -> running — dropping the initial container logs.
   $effect(() => {
-    if (!project) return;
-    const pid = project.id;
-    if (activeTab === 'logs') {
-      logsError = null;
-      // Refresh the service list each time the tab opens; the compose file
-      // could have changed under us (user edited disk).
-      projectStore.listComposeServices(pid).then((s) => (composeServices = s));
-      const svc = logFilter;
-      projectStore.startLogStream(pid, svc).catch((e) => (logsError = String(e)));
-      return () => {
-        projectStore.stopLogStream(pid);
-      };
-    }
+    const pid = id;
+    const tab = activeTab;
+    const svc = logFilter;
+    if (!pid || tab !== 'logs') return;
+    logsError = null;
+    // Refresh the service list each time the tab opens; the compose file
+    // could have changed under us (user edited disk).
+    projectStore.listComposeServices(pid).then((s) => (composeServices = s)).catch(() => {});
+    projectStore.startLogStream(pid, svc).catch((e) => (logsError = String(e)));
+    return () => {
+      projectStore.stopLogStream(pid);
+    };
   });
 
-  async function changeLogFilter(next: string | null) {
-    if (!project) return;
+  function changeLogFilter(next: string | null) {
+    // Just update the filter — the effect above owns stop/restart. Calling
+    // setLogFilter here too caused a redundant double restart and a race on
+    // the same stream id.
     logFilter = next;
     logsError = null;
-    try {
-      await projectStore.setLogFilter(project.id, next);
-    } catch (e) {
-      logsError = String(e);
-    }
   }
 
   $effect(() => {
@@ -172,8 +236,18 @@
   }
 
   function dsn(): string | null {
-    if (!project || !mysqlPort) return null;
-    return `mysql://sail:password@127.0.0.1:${mysqlPort.host}/${project.composeProjectName}`;
+    if (!project || !dbPort) return null;
+    const conn = projectEnv?.dbConnection ?? 'mysql';
+    const scheme =
+      conn === 'pgsql' || conn === 'postgres' || conn === 'postgresql'
+        ? 'postgresql'
+        : conn === 'mongodb'
+          ? 'mongodb'
+          : 'mysql';
+    const user = projectEnv?.dbUsername ?? 'sail';
+    const pass = projectEnv?.dbPassword ?? 'password';
+    const db = projectEnv?.dbDatabase ?? project.composeProjectName;
+    return `${scheme}://${user}:${pass}@127.0.0.1:${dbPort.host}/${db}`;
   }
 
   let dsnCopied = $state(false);
@@ -300,14 +374,26 @@
     }
   }
 
-  async function deleteAutoCmd(cmd: AutoCommand) {
-    if (!confirm) return;
+  // Auto-command pending deletion, shown in a ConfirmModal. The old code was
+  // `if (!confirm) return` where `confirm` is window.confirm (always truthy),
+  // so the guard never fired and a single click deleted with no confirmation.
+  let pendingDeleteCmd = $state<AutoCommand | null>(null);
+
+  function askDeleteAutoCmd(cmd: AutoCommand) {
+    pendingDeleteCmd = cmd;
+  }
+
+  async function confirmDeleteAutoCmd() {
+    const cmd = pendingDeleteCmd;
+    if (!cmd) return;
     try {
       await projectStore.deleteAutoCommand(cmd.id);
       if (editingCmd?.id === cmd.id) editingCmd = null;
       await loadAutoCommands();
     } catch (e) {
       projectStore.error = String(e);
+    } finally {
+      pendingDeleteCmd = null;
     }
   }
 
@@ -509,22 +595,26 @@
     return d.toLocaleString();
   }
 
+  // Show the project's actual .env when we have it. Only if the read failed
+  // (or hasn't returned yet) do we fall back to a best-effort reconstruction —
+  // and that fallback no longer hard-codes WWWUSER/WWWGROUP or DB credentials,
+  // which are wrong for a non-501 account or an imported project.
   const envContent = $derived(
-    project
-      ? `APP_NAME=${project.name}
+    projectEnv?.raw
+      ? projectEnv.raw
+      : project
+        ? `APP_NAME=${project.name}
 APP_PORT=${project.ports.find((p) => p.service === 'app')?.host ?? 80}
 APP_URL=http://localhost:${project.ports.find((p) => p.service === 'app')?.host ?? 80}
 
 COMPOSE_PROJECT_NAME=${project.composeProjectName}
-WWWGROUP=20
-WWWUSER=501
 
 VITE_PORT=${project.ports.find((p) => p.service === 'vite')?.host ?? 5173}
-${project.ports.find((p) => p.service === 'mysql') ? `FORWARD_DB_PORT=${project.ports.find((p) => p.service === 'mysql')!.host}\nDB_HOST=mysql\nDB_DATABASE=${project.composeProjectName}` : ''}
+${dbPort ? `FORWARD_DB_PORT=${dbPort.host}` : ''}
 ${project.ports.find((p) => p.service === 'redis') ? `FORWARD_REDIS_PORT=${project.ports.find((p) => p.service === 'redis')!.host}` : ''}
 ${project.ports.find((p) => p.service === 'mailpit_ui') ? `FORWARD_MAILPIT_DASHBOARD_PORT=${project.ports.find((p) => p.service === 'mailpit_ui')!.host}` : ''}
 `.trim()
-      : '',
+        : '',
   );
 </script>
 
@@ -618,6 +708,16 @@ ${project.ports.find((p) => p.service === 'mailpit_ui') ? `FORWARD_MAILPIT_DASHB
       </button>
     {/each}
   </nav>
+
+  {#if project.status === 'error' && lastErrorDetail}
+    <div class="error-banner" role="alert">
+      <p class="error-banner-title">
+        <Icon name="x" size={13} />
+        The last operation failed
+      </p>
+      <pre class="error-banner-detail selectable">{lastErrorDetail}</pre>
+    </div>
+  {/if}
   </div>
 
   <section class="tab-body">
@@ -820,7 +920,7 @@ ${project.ports.find((p) => p.service === 'mailpit_ui') ? `FORWARD_MAILPIT_DASHB
                 {cmd.enabled ? 'Disable' : 'Enable'}
               </button>
               <button class="btn btn-ghost" onclick={() => startEditCmd(cmd)}>Edit</button>
-              <button class="btn btn-ghost btn-danger" onclick={() => deleteAutoCmd(cmd)}>
+              <button class="btn btn-ghost btn-danger" onclick={() => askDeleteAutoCmd(cmd)}>
                 <Icon name="trash" size={12} />
               </button>
             </div>
@@ -1036,19 +1136,19 @@ ${project.ports.find((p) => p.service === 'mailpit_ui') ? `FORWARD_MAILPIT_DASHB
       </div>
     {:else if activeTab === 'database'}
       <div class="panel">
-        <h3>MySQL connection</h3>
-        {#if mysqlPort}
+        <h3>Database connection</h3>
+        {#if dbPort}
           <dl class="kv">
             <dt>Host</dt>
             <dd class="mono selectable">127.0.0.1</dd>
             <dt>Port</dt>
-            <dd class="mono selectable">{mysqlPort.host}</dd>
+            <dd class="mono selectable">{dbPort.host}</dd>
             <dt>Database</dt>
-            <dd class="mono selectable">{project.composeProjectName}</dd>
+            <dd class="mono selectable">{projectEnv?.dbDatabase ?? project.composeProjectName}</dd>
             <dt>Username</dt>
-            <dd class="mono selectable">sail</dd>
+            <dd class="mono selectable">{projectEnv?.dbUsername ?? 'sail'}</dd>
             <dt>Password</dt>
-            <dd class="mono selectable">password</dd>
+            <dd class="mono selectable">{projectEnv?.dbPassword ?? 'password'}</dd>
           </dl>
           <div class="db-actions">
             <button class="btn" onclick={openInTablePlus}>
@@ -1075,6 +1175,17 @@ ${project.ports.find((p) => p.service === 'mailpit_ui') ? `FORWARD_MAILPIT_DASHB
     danger
     onConfirm={performDelete}
     onCancel={() => (confirmDeleteOpen = false)}
+  />
+
+  <ConfirmModal
+    open={pendingDeleteCmd !== null}
+    title="Delete auto-command?"
+    message="This removes the auto-command from this project. It won't affect any running process."
+    detail={pendingDeleteCmd?.label ?? ''}
+    confirmLabel="Delete"
+    danger
+    onConfirm={confirmDeleteAutoCmd}
+    onCancel={() => (pendingDeleteCmd = null)}
   />
 {/if}
 
@@ -1136,6 +1247,33 @@ ${project.ports.find((p) => p.service === 'mailpit_ui') ? `FORWARD_MAILPIT_DASHB
   }
   .tabs::-webkit-scrollbar {
     display: none;
+  }
+  .error-banner {
+    margin: 12px 26px;
+    padding: 10px 14px;
+    border: 1px solid var(--error);
+    border-radius: 8px;
+    background: var(--error-soft);
+  }
+  .error-banner-title {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin: 0 0 6px;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--error);
+  }
+  .error-banner-detail {
+    margin: 0;
+    max-height: 140px;
+    overflow: auto;
+    font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace;
+    font-size: 11px;
+    line-height: 1.5;
+    white-space: pre-wrap;
+    word-break: break-word;
+    color: var(--text);
   }
   .tab {
     display: flex;

@@ -76,16 +76,27 @@
   async function toggleStartStop(e: MouseEvent) {
     e.stopPropagation();
     if (isBusy) return;
-    if (isRunning) {
-      await projectStore.stop(project.id);
-    } else {
-      await projectStore.start(project.id);
+    // The store surfaces the error (toast) and reconciles the stuck status;
+    // swallow the rethrow here so the click handler doesn't reject uncaught.
+    try {
+      if (isRunning) {
+        await projectStore.stop(project.id);
+      } else {
+        await projectStore.start(project.id);
+      }
+    } catch {
+      // handled in the store
     }
   }
 
   async function openInBrowser(e: MouseEvent) {
     e.stopPropagation();
-    if (url) await openUrl(url);
+    if (!url) return;
+    try {
+      await openUrl(url);
+    } catch (err) {
+      projectStore.reportError(`Could not open ${url}: ${err}`);
+    }
   }
 
   function navigate() {

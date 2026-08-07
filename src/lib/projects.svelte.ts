@@ -127,6 +127,8 @@ class ProjectStore {
   } | null>(null);
   /** True while a download/install is in flight, so the sidebar can show progress. */
   updateInstalling = $state(false);
+  /** True while an update check is in flight, so Settings can show progress. */
+  updateChecking = $state(false);
 
   filtered = $derived(
     this.search.trim() === ''
@@ -386,6 +388,18 @@ class ProjectStore {
   async setLogFilter(id: string, service: string | null) {
     await this.stopLogStream(id);
     await this.startLogStream(id, service);
+  }
+
+  async getProjectEnv(id: string): Promise<{
+    raw: string;
+    dbConnection: string | null;
+    dbHost: string | null;
+    dbPort: string | null;
+    dbDatabase: string | null;
+    dbUsername: string | null;
+    dbPassword: string | null;
+  }> {
+    return await invoke('get_project_env', { id });
   }
 
   async listComposeServices(id: string): Promise<string[]> {
@@ -682,6 +696,10 @@ class ProjectStore {
     try {
       await invoke('start_project', { id });
     } catch (e) {
+      // Reconcile the UI: if the command rejected without a terminal status
+      // event, the project would otherwise stay stuck on "Starting" with its
+      // buttons disabled forever. Re-read the authoritative status.
+      await this.reconcileStatus(id);
       this.error = String(e);
       throw e;
     }
@@ -691,8 +709,25 @@ class ProjectStore {
     try {
       await invoke('stop_project', { id });
     } catch (e) {
+      await this.reconcileStatus(id);
       this.error = String(e);
       throw e;
+    }
+  }
+
+  /** Re-read one project's status from the backend and patch it locally. */
+  private async reconcileStatus(id: string) {
+    try {
+      const status = await invoke<ProjectStatus>('refresh_status', { id });
+      this.projects = this.projects.map((p) => (p.id === id ? { ...p, status } : p));
+    } catch {
+      // If even the reconcile fails, fall back to marking it errored so the
+      // buttons aren't stuck in a transitioning state.
+      this.projects = this.projects.map((p) =>
+        p.id === id && (p.status === 'starting' || p.status === 'stopping')
+          ? { ...p, status: 'error' }
+          : p,
+      );
     }
   }
 
@@ -749,10 +784,17 @@ class ProjectStore {
   /**
    * Ask the updater plugin if a newer release exists. Stores the full update
    * object so a later UI click can call downloadAndInstall() without
-   * re-checking. Silent failures are intentional: no network, no published
-   * release, signature mismatch — none should bug the user about it.
+   * re-checking.
+   *
+   * Never throws — offline, no published release, a 404 on latest.json, and a
+   * signature mismatch all resolve to 'failed'. The boot and interval callers
+   * ignore the result on purpose (a flaky network shouldn't nag anyone), but
+   * the Settings "Check now" button reports it: a manual check that silently
+   * does nothing is indistinguishable from a broken one.
    */
-  async checkForUpdate() {
+  async checkForUpdate(): Promise<'available' | 'up-to-date' | 'failed'> {
+    if (this.updateChecking) return this.updateAvailable ? 'available' : 'up-to-date';
+    this.updateChecking = true;
     try {
       const { check } = await import('@tauri-apps/plugin-updater');
       const update = await check();
@@ -762,11 +804,19 @@ class ProjectStore {
           body: update.body ?? null,
           update,
         };
-      } else {
-        this.updateAvailable = null;
+        return 'available';
       }
-    } catch {
       this.updateAvailable = null;
+      return 'up-to-date';
+    } catch (e) {
+      // WHY: from here a 404 on latest.json (a release built without updater
+      // artifacts) is indistinguishable from being offline. Log it so a broken
+      // release pipeline is diagnosable instead of silently never prompting.
+      console.warn('[updater] check failed:', e);
+      this.updateAvailable = null;
+      return 'failed';
+    } finally {
+      this.updateChecking = false;
     }
   }
 

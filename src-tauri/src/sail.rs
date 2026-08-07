@@ -21,6 +21,21 @@ pub struct ProcessOutput {
 
 pub const OUTPUT_EVENT: &str = "process-output";
 
+/// Run a command to completion but give up after `secs`. Every docker call
+/// that's polled from the UI must use this: when Docker Desktop is paused or
+/// the daemon wedges, a bare `.output().await` never returns and the invoke
+/// hangs the frontend forever. A timeout surfaces as an error the UI can show
+/// instead.
+pub async fn output_with_timeout(cmd: &mut Command, secs: u64) -> AppResult<std::process::Output> {
+    match tokio::time::timeout(std::time::Duration::from_secs(secs), cmd.output()).await {
+        Ok(Ok(out)) => Ok(out),
+        Ok(Err(e)) => Err(AppError::Other(format!("could not run docker: {e}"))),
+        Err(_) => Err(AppError::DockerUnavailable(
+            "docker command timed out — engine likely paused or unresponsive".into(),
+        )),
+    }
+}
+
 pub async fn check_docker() -> AppResult<()> {
     // `docker ps -q` requires a working daemon connection — `docker info`
     // alone can succeed in odd states (e.g. Docker Desktop paused). Wrap in
@@ -137,6 +152,19 @@ pub async fn run_auto_commands(
     commands: &[crate::models::AutoCommand],
 ) {
     use crate::models::AutoCommandRunMode;
+
+    // Dedup: if we're about to (re)spawn any service-mode command, first stop
+    // whatever service processes are already running for this project.
+    // Otherwise starting an already-running project again — or clicking "Run
+    // auto-commands now" repeatedly — stacks N copies of `queue:work` /
+    // `horizon` inside the container, so every job runs N times.
+    let has_service = commands
+        .iter()
+        .any(|c| c.enabled && matches!(c.run_mode, AutoCommandRunMode::Service));
+    if has_service {
+        stop_auto_services(project).await;
+    }
+
     for cmd in commands.iter().filter(|c| c.enabled) {
         let raw = cmd.command.trim();
         if raw.is_empty() {
@@ -158,14 +186,48 @@ pub async fn run_auto_commands(
 /// Stop and reap all background service-mode auto-commands for a project.
 /// Called from commands::stop_project before `sail::stop` so we kill our
 /// children before the container is brought down.
-pub async fn stop_auto_services(project_id: &str) {
-    let mut map = auto_handles().lock().await;
-    if let Some(children) = map.remove(project_id) {
-        for mut child in children {
-            let _ = child.kill().await;
+///
+/// Killing the host-side `docker compose exec` client alone is NOT reliable:
+/// for a non-TTY exec the daemon leaves the in-container process running as an
+/// orphan. So we also sweep the PID files each service wrote (see
+/// `spawn_auto_service`) and kill the real in-container processes. Best-effort
+/// and time-boxed — a wedged container must not hang Stop.
+pub async fn stop_auto_services(project: &Project) {
+    // 1. Kill the host-side clients so output streaming stops.
+    {
+        let mut map = auto_handles().lock().await;
+        if let Some(children) = map.remove(&project.id) {
+            for mut child in children {
+                let _ = child.kill().await;
+            }
         }
     }
+
+    // 2. Kill the actual in-container processes via their PID files.
+    let sweep = format!(
+        "for f in {dir}/sailmgr-{pid}-*.pid; do [ -e \"$f\" ] || continue; \
+         kill \"$(cat \"$f\")\" 2>/dev/null; rm -f \"$f\"; done",
+        dir = AUTO_PID_DIR,
+        pid = project.id,
+    );
+    let fut = Command::new("docker")
+        .args([
+            "compose",
+            "exec",
+            "-T",
+            "laravel.test",
+            "bash",
+            "-lc",
+            &sweep,
+        ])
+        .current_dir(&project.path)
+        .output();
+    let _ = tokio::time::timeout(std::time::Duration::from_secs(5), fut).await;
 }
+
+/// Where service commands drop their in-container PID file. `/tmp` inside the
+/// container is fine — it dies with the container anyway.
+const AUTO_PID_DIR: &str = "/tmp";
 
 async fn run_auto_once(
     app: &AppHandle,
@@ -217,8 +279,23 @@ async fn spawn_auto_service(
     label: &str,
     cmd: &str,
 ) -> AppResult<()> {
+    // Record the in-container PID before exec-ing into the real command, so
+    // stop_auto_services can reliably kill it even though the host-side client
+    // getting killed wouldn't. `exec` means `$$` (the shell PID that wrote the
+    // file) becomes the command's PID. project.id/command_id are UUIDs, so the
+    // path is shell-safe.
+    let pid_file = format!("{AUTO_PID_DIR}/sailmgr-{}-{}.pid", project.id, command_id);
+    let wrapped = format!("echo $$ > '{pid_file}'; exec {cmd}");
     let mut child = Command::new("docker")
-        .args(["compose", "exec", "-T", "laravel.test", "bash", "-lc", cmd])
+        .args([
+            "compose",
+            "exec",
+            "-T",
+            "laravel.test",
+            "bash",
+            "-lc",
+            &wrapped,
+        ])
         .current_dir(&project.path)
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
@@ -307,11 +384,11 @@ pub async fn stop(app: &AppHandle, project: &Project) -> AppResult<()> {
 }
 
 pub async fn current_status(project: &Project) -> ProjectStatus {
-    let output = Command::new("docker")
-        .args(["compose", "ps", "-q"])
-        .current_dir(&project.path)
-        .output()
-        .await;
+    // Polled from the UI (refresh_status), so it must be time-boxed: a paused
+    // daemon would otherwise hang the status refresh indefinitely.
+    let mut cmd = Command::new("docker");
+    cmd.args(["compose", "ps", "-q"]).current_dir(&project.path);
+    let output = output_with_timeout(&mut cmd, 5).await;
 
     match output {
         Ok(o) if o.status.success() => {

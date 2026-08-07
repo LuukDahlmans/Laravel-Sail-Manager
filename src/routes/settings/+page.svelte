@@ -4,11 +4,52 @@
   import Icon from '$lib/components/Icon.svelte';
   import ConfirmModal from '$lib/components/ConfirmModal.svelte';
   import { toast } from '$lib/toast.svelte';
+  import { open as openDialog } from '@tauri-apps/plugin-dialog';
   import type { EditorChoice, ThemeChoice } from '$lib/types';
 
   let projectsRoot = $state(projectStore.envCheck?.projectsRoot ?? '');
   let editor = $state<EditorChoice>(projectStore.settings?.editor ?? '');
   let editorSaving = $state(false);
+  let changingRoot = $state(false);
+
+  // Change where NEW projects are scaffolded. Existing projects stay where
+  // they are — this only affects future create/clone destinations.
+  async function changeProjectsRoot() {
+    if (changingRoot) return;
+    try {
+      const selected = await openDialog({
+        directory: true,
+        multiple: false,
+        title: 'Choose where to keep new Laravel projects',
+        defaultPath: projectsRoot || undefined,
+      });
+      if (typeof selected !== 'string' || selected.length === 0) return;
+      changingRoot = true;
+      await projectStore.setProjectsRoot(selected);
+      projectsRoot = projectStore.envCheck?.projectsRoot ?? selected;
+      toast.success('Projects root updated');
+    } catch (e) {
+      projectStore.reportError(String(e), 'Could not change projects root');
+    } finally {
+      changingRoot = false;
+    }
+  }
+
+  async function checkForUpdates() {
+    const result = await projectStore.checkForUpdate();
+    if (result === 'available') {
+      toast.success(
+        `Version ${projectStore.updateAvailable?.version} is available — install it from the sidebar.`,
+      );
+    } else if (result === 'up-to-date') {
+      toast.info('You are running the latest version.');
+    } else {
+      projectStore.reportError(
+        'Could not reach the update server. Check your connection and try again.',
+        'Update check failed',
+      );
+    }
+  }
 
   $effect(() => {
     if (projectStore.envCheck?.projectsRoot) {
@@ -171,8 +212,9 @@
         <div class="title">Use <code>.{tld}</code> hostnames</div>
         <div class="desc">
           Routes <code>http://&lt;project&gt;.{tld}</code> to the right Sail container via a built-in
-          Traefik proxy on port 80. Edits <code>/etc/hosts</code> — you'll see a macOS admin prompt
-          on first enable and whenever you add or remove projects.
+          Traefik proxy on port 80, with wildcard <code>*.{tld}</code> DNS handled by a local
+          dnsmasq. You'll see a single macOS admin prompt the first time you enable this (to add
+          <code>/etc/resolver/{tld}</code>) — not one per project.
         </div>
       </div>
       <button
@@ -286,7 +328,7 @@
     {#if projectStore.togglingLocalUrls}
       <p class="hint working">
         <span class="spinner"></span>
-        {localUrlsOn ? 'Tearing down…' : 'Setting up Traefik and patching /etc/hosts…'}
+        {localUrlsOn ? 'Tearing down…' : 'Setting up Traefik and DNS resolver…'}
       </p>
     {/if}
   </div>
@@ -295,8 +337,15 @@
     <h2>Paths</h2>
     <div class="field">
       <label for="projects-root">Projects root folder</label>
-      <input id="projects-root" type="text" bind:value={projectsRoot} readonly />
-      <p class="hint">All new Laravel projects are created here. Editing this isn't wired up yet.</p>
+      <div class="root-row">
+        <input id="projects-root" type="text" value={projectsRoot} readonly />
+        <button class="btn" onclick={changeProjectsRoot} disabled={changingRoot}>
+          {changingRoot ? 'Changing…' : 'Change…'}
+        </button>
+      </div>
+      <p class="hint">
+        Where new Laravel projects are created. Existing projects aren't moved.
+      </p>
     </div>
   </div>
 
@@ -326,7 +375,12 @@
       </div>
       <div class="about-text">
         <div class="about-name">Sail Manager</div>
-        <div class="about-version">Version 0.1.0 · MIT License</div>
+        <!-- WHY: read from the store, not hardcoded. CI rewrites the version in
+             tauri.conf.json / package.json / Cargo.toml per release but never
+             touches this file, so a literal here would pin at 0.1.0 forever. -->
+        <div class="about-version">
+          {projectStore.appVersion ? `Version ${projectStore.appVersion} · ` : ''}MIT License
+        </div>
         <p class="about-tagline">
           A native macOS app for running many Laravel Sail projects in parallel.
         </p>
@@ -361,6 +415,22 @@
           </a>
         </div>
       </div>
+    </div>
+
+    <div class="row-block">
+      <div class="copy">
+        <div class="title">Updates</div>
+        <div class="desc">
+          {#if projectStore.updateAvailable}
+            Version {projectStore.updateAvailable.version} is ready — install it from the sidebar.
+          {:else}
+            Sail Manager checks automatically at launch and every 6 hours.
+          {/if}
+        </div>
+      </div>
+      <button class="btn" onclick={checkForUpdates} disabled={projectStore.updateChecking}>
+        {projectStore.updateChecking ? 'Checking…' : 'Check for updates'}
+      </button>
     </div>
 
     <p class="legal">
@@ -766,6 +836,18 @@
   .field input,
   .field select {
     width: 100%;
+  }
+  .root-row {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+  }
+  .root-row input {
+    flex: 1;
+    min-width: 0;
+  }
+  .root-row .btn {
+    flex-shrink: 0;
   }
   .hint {
     margin: 6px 0 0;

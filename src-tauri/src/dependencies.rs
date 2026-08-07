@@ -118,6 +118,26 @@ pub async fn check_all() -> DependencyCheck {
 }
 
 async fn probe(p: &Probe) -> Option<String> {
+    // `/usr/bin/git` is a Command Line Tools shim: invoking it on a clean Mac
+    // where the CLT aren't installed pops Apple's "install developer tools"
+    // GUI dialog mid-wizard. `xcode-select -p` reports CLT presence WITHOUT
+    // triggering that installer, so gate the git probe on it.
+    #[cfg(target_os = "macos")]
+    if p.bin == "git" {
+        let clt = timeout(
+            Duration::from_secs(3),
+            Command::new("xcode-select").arg("-p").output(),
+        )
+        .await
+        .ok()
+        .and_then(|r| r.ok())
+        .map(|o| o.status.success())
+        .unwrap_or(false);
+        if !clt {
+            return None;
+        }
+    }
+
     let mut cmd = Command::new(p.bin);
     cmd.args(p.args);
     let run = cmd.output();

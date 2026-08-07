@@ -75,7 +75,7 @@ impl ProjectStore {
     }
 
     pub fn list(&self) -> AppResult<Vec<Project>> {
-        let conn = self.conn.lock().expect("poisoned");
+        let conn = self.conn.lock().unwrap_or_else(|e| e.into_inner());
         let mut stmt = conn.prepare(
             "SELECT id, name, compose_project_name, path, status, starter_kit,
                     php_version, services, created_at, last_started
@@ -94,7 +94,7 @@ impl ProjectStore {
     }
 
     pub fn get(&self, id: &str) -> AppResult<Project> {
-        let conn = self.conn.lock().expect("poisoned");
+        let conn = self.conn.lock().unwrap_or_else(|e| e.into_inner());
         let mut stmt = conn.prepare(
             "SELECT id, name, compose_project_name, path, status, starter_kit,
                     php_version, services, created_at, last_started
@@ -109,7 +109,7 @@ impl ProjectStore {
     }
 
     pub fn name_exists(&self, name: &str) -> AppResult<bool> {
-        let conn = self.conn.lock().expect("poisoned");
+        let conn = self.conn.lock().unwrap_or_else(|e| e.into_inner());
         let count: i64 = conn.query_row(
             "SELECT COUNT(*) FROM projects WHERE name = ?1",
             params![name],
@@ -119,7 +119,7 @@ impl ProjectStore {
     }
 
     pub fn host_port_in_use(&self, host: u16) -> AppResult<bool> {
-        let conn = self.conn.lock().expect("poisoned");
+        let conn = self.conn.lock().unwrap_or_else(|e| e.into_inner());
         let count: i64 = conn.query_row(
             "SELECT COUNT(*) FROM ports WHERE host = ?1",
             params![host as i64],
@@ -129,7 +129,7 @@ impl ProjectStore {
     }
 
     pub fn insert(&self, project: &Project) -> AppResult<()> {
-        let mut conn = self.conn.lock().expect("poisoned");
+        let mut conn = self.conn.lock().unwrap_or_else(|e| e.into_inner());
         let tx = conn.transaction()?;
         tx.execute(
             "INSERT INTO projects (id, name, compose_project_name, path, status,
@@ -165,7 +165,7 @@ impl ProjectStore {
     }
 
     pub fn update_status(&self, id: &str, status: ProjectStatus) -> AppResult<()> {
-        let conn = self.conn.lock().expect("poisoned");
+        let conn = self.conn.lock().unwrap_or_else(|e| e.into_inner());
         let n = conn.execute(
             "UPDATE projects SET status = ?1 WHERE id = ?2",
             params![serde_json::to_string(&status)?, id],
@@ -177,7 +177,7 @@ impl ProjectStore {
     }
 
     pub fn touch_last_started(&self, id: &str, when: DateTime<Utc>) -> AppResult<()> {
-        let conn = self.conn.lock().expect("poisoned");
+        let conn = self.conn.lock().unwrap_or_else(|e| e.into_inner());
         conn.execute(
             "UPDATE projects SET last_started = ?1 WHERE id = ?2",
             params![when.to_rfc3339(), id],
@@ -186,7 +186,7 @@ impl ProjectStore {
     }
 
     pub fn delete(&self, id: &str) -> AppResult<()> {
-        let conn = self.conn.lock().expect("poisoned");
+        let conn = self.conn.lock().unwrap_or_else(|e| e.into_inner());
         let n = conn.execute("DELETE FROM projects WHERE id = ?1", params![id])?;
         if n == 0 {
             return Err(AppError::NotFound);
@@ -200,7 +200,7 @@ impl ProjectStore {
         kind: HistoryKind,
         detail: Option<&str>,
     ) -> AppResult<()> {
-        let conn = self.conn.lock().expect("poisoned");
+        let conn = self.conn.lock().unwrap_or_else(|e| e.into_inner());
         conn.execute(
             "INSERT INTO project_history (project_id, kind, detail, at) VALUES (?1, ?2, ?3, ?4)",
             params![
@@ -214,7 +214,7 @@ impl ProjectStore {
     }
 
     pub fn list_history(&self, project_id: &str, limit: u32) -> AppResult<Vec<HistoryEntry>> {
-        let conn = self.conn.lock().expect("poisoned");
+        let conn = self.conn.lock().unwrap_or_else(|e| e.into_inner());
         let mut stmt = conn.prepare(
             "SELECT id, project_id, kind, detail, at
              FROM project_history WHERE project_id = ?1 ORDER BY at DESC LIMIT ?2",
@@ -249,7 +249,7 @@ impl ProjectStore {
     }
 
     pub fn list_auto_commands(&self, project_id: &str) -> AppResult<Vec<AutoCommand>> {
-        let conn = self.conn.lock().expect("poisoned");
+        let conn = self.conn.lock().unwrap_or_else(|e| e.into_inner());
         let mut stmt = conn.prepare(
             "SELECT id, project_id, label, command, run_mode, enabled, sort_order
              FROM auto_commands WHERE project_id = ?1 ORDER BY sort_order ASC",
@@ -280,7 +280,7 @@ impl ProjectStore {
     }
 
     pub fn upsert_auto_command(&self, cmd: &AutoCommand) -> AppResult<()> {
-        let conn = self.conn.lock().expect("poisoned");
+        let conn = self.conn.lock().unwrap_or_else(|e| e.into_inner());
         let run_mode_s = serde_json::to_string(&cmd.run_mode)?
             .trim_matches('"')
             .to_string();
@@ -307,7 +307,7 @@ impl ProjectStore {
     }
 
     pub fn delete_auto_command(&self, id: &str) -> AppResult<()> {
-        let conn = self.conn.lock().expect("poisoned");
+        let conn = self.conn.lock().unwrap_or_else(|e| e.into_inner());
         conn.execute("DELETE FROM auto_commands WHERE id = ?1", params![id])?;
         Ok(())
     }
@@ -315,7 +315,7 @@ impl ProjectStore {
     /// Wipe every row from every table. Used by the "Reset application" flow.
     /// Project folders on disk are NOT touched — only the app's state.
     pub fn clear_all(&self) -> AppResult<()> {
-        let conn = self.conn.lock().expect("poisoned");
+        let conn = self.conn.lock().unwrap_or_else(|e| e.into_inner());
         conn.execute_batch(
             "DELETE FROM project_history;
              DELETE FROM auto_commands;

@@ -37,13 +37,16 @@ pub struct TemplateStore {
 
 impl TemplateStore {
     pub fn open(path: PathBuf) -> AppResult<Self> {
-        let templates = if path.exists() {
-            let raw = std::fs::read_to_string(&path)?;
-            serde_json::from_str::<Vec<Template>>(&raw).unwrap_or_default()
-        } else {
-            let seeds = default_seeds();
-            persist(&path, &seeds)?;
-            seeds
+        // On a corrupt or missing file, re-seed the built-in defaults rather
+        // than starting from an empty list — otherwise a parse failure would
+        // leave the user with zero templates (not even the seeds).
+        let templates = match crate::persist::load_json::<Vec<Template>>(&path) {
+            Some(t) if !t.is_empty() => t,
+            _ => {
+                let seeds = default_seeds();
+                persist(&path, &seeds)?;
+                seeds
+            }
         };
         Ok(Self {
             path,
@@ -52,13 +55,13 @@ impl TemplateStore {
     }
 
     pub fn list(&self) -> Vec<Template> {
-        self.inner.lock().expect("poisoned").clone()
+        self.inner.lock().unwrap_or_else(|e| e.into_inner()).clone()
     }
 
     pub fn get(&self, id: &str) -> Option<Template> {
         self.inner
             .lock()
-            .expect("poisoned")
+            .unwrap_or_else(|e| e.into_inner())
             .iter()
             .find(|t| t.id == id)
             .cloned()
@@ -69,7 +72,7 @@ impl TemplateStore {
         if name.is_empty() {
             return Err(AppError::Other("name is required".into()));
         }
-        let mut guard = self.inner.lock().expect("poisoned");
+        let mut guard = self.inner.lock().unwrap_or_else(|e| e.into_inner());
         if guard.iter().any(|t| t.name.eq_ignore_ascii_case(&name)) {
             return Err(AppError::Other("name already in use".into()));
         }
@@ -92,7 +95,7 @@ impl TemplateStore {
         if name.is_empty() {
             return Err(AppError::Other("name is required".into()));
         }
-        let mut guard = self.inner.lock().expect("poisoned");
+        let mut guard = self.inner.lock().unwrap_or_else(|e| e.into_inner());
         if guard
             .iter()
             .any(|t| t.id != id && t.name.eq_ignore_ascii_case(&name))
@@ -119,7 +122,7 @@ impl TemplateStore {
     }
 
     pub fn delete(&self, id: &str) -> AppResult<()> {
-        let mut guard = self.inner.lock().expect("poisoned");
+        let mut guard = self.inner.lock().unwrap_or_else(|e| e.into_inner());
         let before = guard.len();
         guard.retain(|t| t.id != id);
         if guard.len() == before {
@@ -133,17 +136,14 @@ impl TemplateStore {
     pub fn reset_to_seeds(&self) -> AppResult<()> {
         let seeds = default_seeds();
         persist(&self.path, &seeds)?;
-        *self.inner.lock().expect("poisoned") = seeds;
+        *self.inner.lock().unwrap_or_else(|e| e.into_inner()) = seeds;
         Ok(())
     }
 }
 
 fn persist(path: &Path, templates: &[Template]) -> AppResult<()> {
-    if let Some(parent) = path.parent() {
-        std::fs::create_dir_all(parent)?;
-    }
     let json = serde_json::to_string_pretty(templates)?;
-    std::fs::write(path, json)?;
+    crate::persist::write_atomic(path, &json)?;
     Ok(())
 }
 

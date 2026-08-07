@@ -184,34 +184,41 @@ pub async fn create_project(
     };
     state.store.insert(&project)?;
 
-    let scaffold_result = scaffolder::scaffold(
-        &app,
-        &id,
-        &name,
-        &input.php_version,
-        &input.services,
-        &input.custom_services,
-        &projects_root,
-    )
+    // Everything after the insert can fail (scaffold, .env customization, the
+    // re-read). On ANY failure we must roll back both the DB row and the
+    // on-disk folder — otherwise the row's allocated host ports stay reserved
+    // forever (host_port_in_use keeps returning true) and a stale folder blocks
+    // re-creating the same name.
+    let build = async {
+        let path = scaffolder::scaffold(
+            &app,
+            &id,
+            &name,
+            &input.php_version,
+            &input.services,
+            &input.custom_services,
+            &projects_root,
+        )
+        .await?;
+        scaffolder::customize_env(&path, &name, &ports).await?;
+        state.store.get(&id)
+    }
     .await;
 
-    match scaffold_result {
-        Ok(path) => {
-            scaffolder::customize_env(&path, &name, &ports).await?;
-        }
+    let project = match build {
+        Ok(p) => p,
         Err(e) => {
             let _ = state.store.delete(&id);
+            let _ = tokio::fs::remove_dir_all(&project_path).await;
             return Err(e);
         }
-    }
-
-    let project = state.store.get(&id)?;
+    };
     let _ = state.store.add_history(&id, HistoryKind::Created, None);
     // Release the create lock before refresh_local_urls_silent (which moves
     // `state`). Project creation is finished by this point; another concurrent
     // create can safely begin.
     drop(_create_guard);
-    refresh_local_urls_silent(state).await;
+    refresh_local_urls_silent(&app, state).await;
     Ok(project)
 }
 
@@ -240,6 +247,11 @@ pub async fn start_project(
             Ok(())
         }
         Err(e) => {
+            // `compose up --wait` can fail partway (e.g. a healthcheck times
+            // out) with some containers already up, holding host ports. Bring
+            // the project back down so a failed start doesn't leak containers
+            // and block the ports on the next attempt. Best-effort.
+            let _ = sail::stop(&app, &project).await;
             state.store.update_status(&id, ProjectStatus::Error)?;
             emit_status(&app, &id, ProjectStatus::Error);
             let _ = state
@@ -258,7 +270,7 @@ pub async fn stop_project(app: AppHandle, state: State<'_, AppState>, id: String
 
     // Kill any background service-mode auto-commands first so they don't
     // outlive the container.
-    sail::stop_auto_services(&id).await;
+    sail::stop_auto_services(&project).await;
 
     match sail::stop(&app, &project).await {
         Ok(()) => {
@@ -286,6 +298,13 @@ pub async fn delete_project(
     also_remove_files: bool,
 ) -> AppResult<()> {
     let project = state.store.get(&id)?;
+    // Tear down anything still pointed at this project before its folder goes
+    // away: background auto-services, the live log stream, one-shot output, and
+    // any open shell PTY. Otherwise these keep running against a deleted path.
+    sail::stop_auto_services(&project).await;
+    let _ = log_stream::stop(&id).await;
+    let _ = one_shot::stop(&id).await;
+    let _ = shell::stop(&id).await;
     // Best-effort: regardless of recorded status, try to bring down any
     // containers from partial/aborted starts. Ignore errors.
     let _ = sail::stop(&app, &project).await;
@@ -293,7 +312,7 @@ pub async fn delete_project(
     if also_remove_files {
         let _ = tokio::fs::remove_dir_all(&project.path).await;
     }
-    refresh_local_urls_silent(state).await;
+    refresh_local_urls_silent(&app, state).await;
     Ok(())
 }
 
@@ -398,19 +417,26 @@ pub async fn set_local_urls_https(
         // Steps 1 + 4 only affect the keychain when the CA was/is present
         // and trusted; the rest is idempotent.
         let _ = tls::remove_ca_from_keychain().await;
-        tls::force_regen_ca(&state.tls_dir).await?;
-        let projects = state.store.list().unwrap_or_default();
+        tls::force_regen_ca(&state.tls_dir, &snap.local_url_tld).await?;
+        let projects = state.store.list()?;
         let hosts: Vec<String> = projects
             .iter()
             .map(|p| format!("{}.{}", p.name, snap.local_url_tld))
             .collect();
         tls::force_regen_wildcard_cert(&state.tls_dir, &snap.local_url_tld, &hosts).await?;
         tls::install_ca_to_keychain(&state.tls_dir).await?;
-        let updated = state.settings.update(|s| s.local_urls_https = true)?;
-        if updated.local_urls_enabled {
+        // Only persist `https = true` once every side effect (including the
+        // proxy reconfigure that binds :443) has succeeded. Persisting first
+        // then failing apply_proxy would leave settings claiming HTTPS is on
+        // while Traefik was never reconfigured — the half-state the sibling
+        // set_local_urls_enabled deliberately avoids.
+        if snap.local_urls_enabled {
+            let mut with_https = snap.clone();
+            with_https.local_urls_https = true;
             let projects = state.store.list()?;
-            apply_proxy(&state, &updated, &projects).await?;
+            apply_proxy(&state, &with_https, &projects).await?;
         }
+        let updated = state.settings.update(|s| s.local_urls_https = true)?;
         Ok(updated)
     } else {
         // Best-effort cleanup — if removal fails (e.g. user already deleted
@@ -428,10 +454,15 @@ pub async fn set_local_urls_https(
 #[tauri::command]
 pub async fn set_local_url_tld(state: State<'_, AppState>, tld: String) -> AppResult<Settings> {
     let cleaned = tld.trim().trim_start_matches('.').to_lowercase();
-    if !is_valid_tld(&cleaned) {
+    if !resolver::is_shell_safe_tld(&cleaned) {
         return Err(AppError::Other(
             "TLD must be 2–32 lowercase letters/digits/hyphens (no dots)".into(),
         ));
+    }
+    if !resolver::is_allowed_tld(&cleaned) {
+        return Err(AppError::Other(format!(
+            "'.{cleaned}' is a real or reserved TLD — routing it to localhost would break DNS system-wide. Pick a made-up TLD like 'sail', 'test', or 'ddev'."
+        )));
     }
     let previous_tld = state.settings.snapshot().local_url_tld;
     let updated = state
@@ -440,28 +471,26 @@ pub async fn set_local_url_tld(state: State<'_, AppState>, tld: String) -> AppRe
 
     if updated.local_urls_enabled {
         let projects = state.store.list()?;
+        let tld_changed = previous_tld != updated.local_url_tld;
+        // When HTTPS is on and the TLD changes, the CA must be re-issued
+        // name-constrained to the new TLD and re-trusted — apply_proxy
+        // (via ensure_ca) re-issues it, so bracket with keychain remove/install
+        // so the freshly-scoped root is trusted and the padlock keeps working.
+        if updated.local_urls_https && tld_changed {
+            let _ = tls::remove_ca_from_keychain().await;
+        }
         apply_proxy(&state, &updated, &projects).await?;
+        if updated.local_urls_https && tld_changed {
+            tls::install_ca_to_keychain(&state.tls_dir).await?;
+        }
         dnsmasq::ensure_running(&state.dns_conf_dir, &updated.local_url_tld).await?;
-        if previous_tld != updated.local_url_tld {
+        if tld_changed {
             // Best-effort: drop the old resolver. Will trigger a sudo prompt.
             let _ = resolver::remove_resolver(&previous_tld, false).await;
         }
         resolver::ensure_resolver(&updated.local_url_tld, dnsmasq::HOST_PORT).await?;
     }
     Ok(updated)
-}
-
-fn is_valid_tld(tld: &str) -> bool {
-    let bytes = tld.as_bytes();
-    if bytes.len() < 2 || bytes.len() > 32 {
-        return false;
-    }
-    if bytes[0] == b'-' || bytes[bytes.len() - 1] == b'-' {
-        return false;
-    }
-    bytes
-        .iter()
-        .all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || *b == b'-')
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -575,23 +604,21 @@ pub async fn repair_local_urls_quiet(state: State<'_, AppState>) -> AppResult<Lo
 }
 
 async fn is_container_running(name: &str) -> bool {
-    let out = tokio::process::Command::new("docker")
-        .args(["inspect", name, "--format", "{{.State.Running}}"])
-        .output()
-        .await;
+    let mut cmd = tokio::process::Command::new("docker");
+    cmd.args(["inspect", name, "--format", "{{.State.Running}}"]);
+    let out = sail::output_with_timeout(&mut cmd, 5).await;
     matches!(out, Ok(o) if o.status.success() && String::from_utf8_lossy(&o.stdout).trim() == "true")
 }
 
 async fn proxy_health(name: &str, port: u16) -> (bool, bool) {
-    let out = tokio::process::Command::new("docker")
-        .args([
-            "inspect",
-            name,
-            "--format",
-            "{{.State.Running}}|{{json .NetworkSettings.Ports}}",
-        ])
-        .output()
-        .await;
+    let mut cmd = tokio::process::Command::new("docker");
+    cmd.args([
+        "inspect",
+        name,
+        "--format",
+        "{{.State.Running}}|{{json .NetworkSettings.Ports}}",
+    ]);
+    let out = sail::output_with_timeout(&mut cmd, 5).await;
     match out {
         Ok(o) if o.status.success() => {
             let raw = String::from_utf8_lossy(&o.stdout);
@@ -702,18 +729,17 @@ pub async fn get_project_logs(
 ) -> AppResult<String> {
     let project = state.store.get(&id)?;
     let tail_n = tail.unwrap_or(200).to_string();
-    let out = tokio::process::Command::new("docker")
-        .args([
-            "compose",
-            "logs",
-            "--tail",
-            &tail_n,
-            "--timestamps",
-            "--no-color",
-        ])
-        .current_dir(&project.path)
-        .output()
-        .await?;
+    let mut cmd = tokio::process::Command::new("docker");
+    cmd.args([
+        "compose",
+        "logs",
+        "--tail",
+        &tail_n,
+        "--timestamps",
+        "--no-color",
+    ])
+    .current_dir(&project.path);
+    let out = sail::output_with_timeout(&mut cmd, 10).await?;
     let mut combined = String::new();
     combined.push_str(&String::from_utf8_lossy(&out.stdout));
     let stderr = String::from_utf8_lossy(&out.stderr);
@@ -725,6 +751,42 @@ pub async fn get_project_logs(
         combined = "(no log output — has the project been started?)".to_string();
     }
     Ok(combined)
+}
+
+/// A project's real, on-disk `.env` — plus the DB connection fields parsed out
+/// of it. The Environment and Database tabs render THIS instead of a
+/// synthesized guess, so imported projects (whose credentials/engine differ
+/// from Sail's defaults) show values that actually work.
+#[derive(Debug, Clone, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ProjectEnv {
+    pub raw: String,
+    pub db_connection: Option<String>,
+    pub db_host: Option<String>,
+    pub db_port: Option<String>,
+    pub db_database: Option<String>,
+    pub db_username: Option<String>,
+    pub db_password: Option<String>,
+}
+
+#[tauri::command]
+pub async fn get_project_env(state: State<'_, AppState>, id: String) -> AppResult<ProjectEnv> {
+    let project = state.store.get(&id)?;
+    let env_path = std::path::Path::new(&project.path).join(".env");
+    let raw = tokio::fs::read_to_string(&env_path)
+        .await
+        .unwrap_or_default();
+    let parsed = import::parse_env(&raw);
+    let get = |k: &str| parsed.get(k).filter(|v| !v.is_empty()).cloned();
+    Ok(ProjectEnv {
+        raw,
+        db_connection: get("DB_CONNECTION"),
+        db_host: get("DB_HOST"),
+        db_port: get("FORWARD_DB_PORT").or_else(|| get("DB_PORT")),
+        db_database: get("DB_DATABASE"),
+        db_username: get("DB_USERNAME"),
+        db_password: get("DB_PASSWORD"),
+    })
 }
 
 #[tauri::command]
@@ -751,12 +813,10 @@ pub async fn list_compose_services(
     id: String,
 ) -> AppResult<Vec<String>> {
     let project = state.store.get(&id)?;
-    let out = tokio::process::Command::new("docker")
-        .args(["compose", "config", "--services"])
-        .current_dir(&project.path)
-        .output()
-        .await
-        .map_err(|e| AppError::Other(format!("docker compose config failed: {e}")))?;
+    let mut cmd = tokio::process::Command::new("docker");
+    cmd.args(["compose", "config", "--services"])
+        .current_dir(&project.path);
+    let out = sail::output_with_timeout(&mut cmd, 8).await?;
     if !out.status.success() {
         return Err(AppError::Other(format!(
             "docker compose config failed: {}",
@@ -788,9 +848,19 @@ pub async fn stop_one_shot(id: String) -> AppResult<()> {
 }
 
 #[tauri::command]
-pub async fn import_project(state: State<'_, AppState>, path: String) -> AppResult<Project> {
+pub async fn import_project(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    path: String,
+) -> AppResult<Project> {
+    // Hold the same lock as create_project: import allocates host ports and
+    // inserts, and that allocate+insert must not race a concurrent
+    // create/import/clone or two projects can grab the same port — defeating
+    // the whole point of the app.
+    let guard = state.create_lock.lock().await;
     let project = import::import_existing(&state.store, PathBuf::from(path)).await?;
-    refresh_local_urls_silent(state).await;
+    drop(guard);
+    refresh_local_urls_silent(&app, state).await;
     Ok(project)
 }
 
@@ -847,8 +917,11 @@ pub async fn clone_project(
     input: git::CloneInput,
 ) -> AppResult<Project> {
     let projects_root = state.projects_root();
+    // Same port-allocation race guard as create_project / import_project.
+    let guard = state.create_lock.lock().await;
     let project = git::clone_and_register(&app, &state.store, &projects_root, input).await?;
-    refresh_local_urls_silent(state).await;
+    drop(guard);
+    refresh_local_urls_silent(&app, state).await;
     Ok(project)
 }
 
@@ -900,7 +973,7 @@ pub async fn reset_application(app: AppHandle, state: State<'_, AppState>) -> Ap
 
     // 1. Stop background auto-services for every project we know about.
     for p in &projects {
-        sail::stop_auto_services(&p.id).await;
+        sail::stop_auto_services(p).await;
     }
 
     // 2. Best-effort `docker compose down` for each project. Some may not even
@@ -1061,7 +1134,12 @@ pub async fn get_git_status(path: String) -> AppResult<Option<GitStatus>> {
     stats::get_git_status(&path).await
 }
 
-async fn refresh_local_urls_silent(state: State<'_, AppState>) {
+/// Re-wire Local URLs (Traefik config + dnsmasq) after a project add/remove.
+/// Named "silent" because it never fails the triggering command — but a
+/// failure IS surfaced as a non-blocking warning toast (via an event the
+/// layout listens for), so a project whose `.<tld>` URL couldn't be wired up
+/// doesn't just silently not route.
+async fn refresh_local_urls_silent(app: &AppHandle, state: State<'_, AppState>) {
     let s = state.settings.snapshot();
     if !s.local_urls_enabled {
         return;
@@ -1070,8 +1148,20 @@ async fn refresh_local_urls_silent(state: State<'_, AppState>) {
         Ok(p) => p,
         Err(_) => return,
     };
-    let _ = apply_proxy(&state, &s, &projects).await;
-    let _ = dnsmasq::ensure_running(&state.dns_conf_dir, &s.local_url_tld).await;
+    let result = async {
+        apply_proxy(&state, &s, &projects).await?;
+        dnsmasq::ensure_running(&state.dns_conf_dir, &s.local_url_tld).await
+    }
+    .await;
+    if let Err(e) = result {
+        let _ = app.emit(
+            "local-urls-warning",
+            format!(
+                "Local URLs couldn't be updated for the change you just made — a project's .{} address may not route. {e}",
+                s.local_url_tld
+            ),
+        );
+    }
 }
 
 fn is_valid_name(name: &str) -> bool {
@@ -1089,79 +1179,7 @@ fn is_valid_name(name: &str) -> bool {
 
 #[cfg(test)]
 mod tests {
-    use super::{is_valid_name, is_valid_tld};
-
-    // ----- is_valid_tld -----
-
-    #[test]
-    fn tld_accepts_alpha_only() {
-        assert!(is_valid_tld("sail"));
-        assert!(is_valid_tld("test"));
-        assert!(is_valid_tld("local"));
-    }
-
-    #[test]
-    fn tld_accepts_hyphenated() {
-        assert!(is_valid_tld("local-dev"));
-        assert!(is_valid_tld("a-b-c"));
-    }
-
-    #[test]
-    fn tld_accepts_digits() {
-        assert!(is_valid_tld("ip6"));
-        assert!(is_valid_tld("v2"));
-    }
-
-    #[test]
-    fn tld_rejects_empty() {
-        assert!(!is_valid_tld(""));
-    }
-
-    #[test]
-    fn tld_rejects_single_char() {
-        // The minimum length is 2.
-        assert!(!is_valid_tld("a"));
-    }
-
-    #[test]
-    fn tld_rejects_trailing_dash() {
-        assert!(!is_valid_tld("foo-"));
-    }
-
-    #[test]
-    fn tld_rejects_leading_dash() {
-        assert!(!is_valid_tld("-foo"));
-    }
-
-    #[test]
-    fn tld_rejects_uppercase() {
-        assert!(!is_valid_tld("SAIL"));
-        assert!(!is_valid_tld("Sail"));
-    }
-
-    #[test]
-    fn tld_rejects_dots() {
-        assert!(!is_valid_tld("co.uk"));
-        assert!(!is_valid_tld("foo.bar"));
-    }
-
-    #[test]
-    fn tld_rejects_too_long() {
-        // 33 chars is over the 32-char cap.
-        assert!(!is_valid_tld(&"a".repeat(33)));
-    }
-
-    #[test]
-    fn tld_accepts_max_length() {
-        assert!(is_valid_tld(&"a".repeat(32)));
-    }
-
-    #[test]
-    fn tld_rejects_underscore_and_special_chars() {
-        assert!(!is_valid_tld("foo_bar"));
-        assert!(!is_valid_tld("foo bar"));
-        assert!(!is_valid_tld("foo!bar"));
-    }
+    use super::is_valid_name;
 
     // ----- is_valid_name -----
 

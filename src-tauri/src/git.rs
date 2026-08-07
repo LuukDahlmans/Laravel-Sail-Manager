@@ -191,6 +191,28 @@ async fn post_clone(
 
     run_streaming(app, id, &mut cmd).await?;
 
+    // A cloned repo's compose file is untrusted. Now that install/sail:install
+    // has produced (or the repo shipped) a compose file, audit it for
+    // host-escape directives before the project can be Started.
+    for candidate in [
+        "compose.yaml",
+        "compose.yml",
+        "docker-compose.yml",
+        "docker-compose.yaml",
+    ] {
+        let compose_path = project_path.join(candidate);
+        if compose_path.exists() {
+            let text = tokio::fs::read_to_string(&compose_path)
+                .await
+                .map_err(|e| AppError::Other(format!("could not read {candidate}: {e}")))?;
+            let risks = crate::compose_audit::audit(&text);
+            if !risks.is_empty() {
+                return Err(AppError::Other(crate::compose_audit::describe(&risks)));
+            }
+            break;
+        }
+    }
+
     // Allocate ports for default services and customise .env.
     let ports: Vec<Port> = PortAllocator::allocate_for_services(store, &services)?;
     scaffolder::customize_env(project_path, name, &ports).await?;

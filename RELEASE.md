@@ -6,18 +6,31 @@ the Apple Developer Program enrollment is approved.
 ## Status
 
 - [x] DMG bundle config + retina background
-- [x] Updater plugin wired in `lib.rs` + frontend check
+- [x] Updater plugin wired in `lib.rs` + frontend check (boot + every 6h) + sidebar
+      "Update available" banner + manual "Check for updates" in Settings → About
 - [x] Universal binary target in workflow
 - [x] Tag-based release trigger
+- [x] Tauri updater signing keypair generated + real `pubkey` in `tauri.conf.json`
+- [x] `bundle.createUpdaterArtifacts: true` set (required in Tauri 2, or no `.tar.gz`/`.sig`/`latest.json` is produced)
+- [x] `release.yml` uses `tauri-action` (signs, notarizes, generates `latest.json`) + gates on tests/clippy/svelte-check
+- [x] `src-tauri/entitlements.plist` created (hardened runtime requirements)
 - [ ] **Apple Developer Program enrollment** — applied, waiting on Apple
 - [ ] Developer ID Application certificate generated + exported as `.p12`
 - [ ] App-specific password created at appleid.apple.com
-- [ ] Tauri updater signing keypair generated
-- [ ] `pubkey` placeholder in `tauri.conf.json` replaced with real key
-- [ ] Eight GitHub repo secrets added (see below)
-- [ ] `release.yml` rewritten to use `tauri-action` (signs, notarizes, generates `latest.json`)
-- [ ] `src-tauri/entitlements.plist` created (hardened runtime requirements)
+- [ ] GitHub repo secrets added (see below) — **must include `TAURI_SIGNING_PRIVATE_KEY`**
+      or the release build now fails at the updater-artifact step
 - [ ] First signed release tagged + published
+
+### Verify the updater end-to-end after the first release
+
+```sh
+# The manifest the app fetches must exist and list a signed artifact:
+curl -sL https://github.com/LuukDahlmans/Laravel-Sail-Manager/releases/latest/download/latest.json | jq
+#   → { "version": "...", "platforms": { "darwin-aarch64": { "signature": "...", "url": "...app.tar.gz" }, ... } }
+```
+
+If `latest.json` 404s or has an empty signature, the `TAURI_SIGNING_PRIVATE_KEY`
+secret is missing/mismatched, or `createUpdaterArtifacts` didn't take effect.
 
 ## Once Apple approves
 

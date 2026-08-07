@@ -5,6 +5,7 @@ use serde::{Deserialize, Serialize};
 use tokio::process::Command;
 
 use crate::error::{AppError, AppResult};
+use crate::sail::output_with_timeout;
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -49,11 +50,9 @@ pub async fn get_project_stats(compose_project_name: &str) -> AppResult<Vec<Cont
     let label_filter = format!("label=com.docker.compose.project={compose_project_name}");
 
     // 1. Resolve the container IDs that belong to this project.
-    let ps_out = Command::new("docker")
-        .args(["ps", "--filter", &label_filter, "--format", "{{.ID}}"])
-        .output()
-        .await
-        .map_err(|e| AppError::Other(format!("could not run docker ps: {e}")))?;
+    let mut ps_cmd = Command::new("docker");
+    ps_cmd.args(["ps", "--filter", &label_filter, "--format", "{{.ID}}"]);
+    let ps_out = output_with_timeout(&mut ps_cmd, 5).await?;
     if !ps_out.status.success() {
         let stderr = String::from_utf8_lossy(&ps_out.stderr).trim().to_string();
         return Err(AppError::Other(if stderr.is_empty() {
@@ -83,11 +82,9 @@ pub async fn get_project_stats(compose_project_name: &str) -> AppResult<Vec<Cont
     for id in &ids {
         args.push(id);
     }
-    let out = Command::new("docker")
-        .args(&args)
-        .output()
-        .await
-        .map_err(|e| AppError::Other(format!("could not run docker stats: {e}")))?;
+    let mut stats_cmd = Command::new("docker");
+    stats_cmd.args(&args);
+    let out = output_with_timeout(&mut stats_cmd, 8).await?;
 
     if !out.status.success() {
         let stderr = String::from_utf8_lossy(&out.stderr).trim().to_string();
@@ -226,16 +223,14 @@ fn parse_percent(raw: &str) -> f64 {
 pub async fn get_all_running_stats() -> AppResult<HashMap<String, ProjectStatsSummary>> {
     // 1. List running containers with their compose-project label so we can
     //    map container IDs to projects.
-    let ps_out = Command::new("docker")
-        .args([
-            "ps",
-            "--no-trunc",
-            "--format",
-            "{{.ID}}\t{{.Label \"com.docker.compose.project\"}}",
-        ])
-        .output()
-        .await
-        .map_err(|e| AppError::Other(format!("docker ps failed: {e}")))?;
+    let mut ps_cmd = Command::new("docker");
+    ps_cmd.args([
+        "ps",
+        "--no-trunc",
+        "--format",
+        "{{.ID}}\t{{.Label \"com.docker.compose.project\"}}",
+    ]);
+    let ps_out = output_with_timeout(&mut ps_cmd, 5).await?;
     if !ps_out.status.success() {
         return Ok(HashMap::new());
     }
@@ -255,17 +250,15 @@ pub async fn get_all_running_stats() -> AppResult<HashMap<String, ProjectStatsSu
     // 2. One snapshot of `docker stats` for everything running. Without an
     //    explicit list of IDs this returns all containers; we filter against
     //    the map above so a stray non-Sail container doesn't sneak in.
-    let stats_out = Command::new("docker")
-        .args([
-            "stats",
-            "--no-stream",
-            "--no-trunc",
-            "--format",
-            "{{json .}}",
-        ])
-        .output()
-        .await
-        .map_err(|e| AppError::Other(format!("docker stats failed: {e}")))?;
+    let mut stats_cmd = Command::new("docker");
+    stats_cmd.args([
+        "stats",
+        "--no-stream",
+        "--no-trunc",
+        "--format",
+        "{{json .}}",
+    ]);
+    let stats_out = output_with_timeout(&mut stats_cmd, 8).await?;
     if !stats_out.status.success() {
         return Ok(HashMap::new());
     }
@@ -314,11 +307,9 @@ pub async fn get_docker_system_info() -> AppResult<DockerSystemInfo> {
     let mut info = DockerSystemInfo::default();
 
     // docker info --format '{{json .}}'
-    if let Ok(out) = Command::new("docker")
-        .args(["info", "--format", "{{json .}}"])
-        .output()
-        .await
-    {
+    let mut info_cmd = Command::new("docker");
+    info_cmd.args(["info", "--format", "{{json .}}"]);
+    if let Ok(out) = output_with_timeout(&mut info_cmd, 5).await {
         if out.status.success() {
             if let Ok(d) = serde_json::from_slice::<DockerInfo>(&out.stdout) {
                 info.containers_running = d.containers_running;
@@ -330,11 +321,9 @@ pub async fn get_docker_system_info() -> AppResult<DockerSystemInfo> {
     }
 
     // docker system df --format '{{json .}}' returns one row per resource type
-    if let Ok(out) = Command::new("docker")
-        .args(["system", "df", "--format", "{{json .}}"])
-        .output()
-        .await
-    {
+    let mut df_cmd = Command::new("docker");
+    df_cmd.args(["system", "df", "--format", "{{json .}}"]);
+    if let Ok(out) = output_with_timeout(&mut df_cmd, 5).await {
         if out.status.success() {
             for line in String::from_utf8_lossy(&out.stdout).lines() {
                 let row: SystemDfRow = match serde_json::from_str(line.trim()) {

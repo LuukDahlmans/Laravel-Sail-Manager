@@ -50,7 +50,7 @@ impl AppState {
     pub fn projects_root(&self) -> PathBuf {
         self.projects_root_inner
             .read()
-            .expect("projects_root lock poisoned")
+            .unwrap_or_else(|e| e.into_inner())
             .clone()
     }
 
@@ -58,6 +58,6 @@ impl AppState {
         *self
             .projects_root_inner
             .write()
-            .expect("projects_root lock poisoned") = path;
+            .unwrap_or_else(|e| e.into_inner()) = path;
     }
 }

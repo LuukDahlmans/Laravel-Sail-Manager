@@ -26,9 +26,10 @@
   // Default `.sail` URLs to ON — they're the headline feature, and the only
   // friction is one macOS admin prompt when the user clicks "Enable & continue".
   let enableLocalUrls = $state(true);
-  // HTTPS defaults to ON too. Adds one extra keychain dialog (no sudo) on top
-  // of the local-URLs admin prompt — a small cost for green-padlock URLs.
-  let enableHttps = $state(true);
+  // HTTPS defaults to OFF: it adds a keychain-trust dialog and binds :443 (often
+  // already held by Herd/Valet), so it's opt-in rather than a first-run gate.
+  // Users can turn it on later in Settings.
+  let enableHttps = $state(false);
   let tldDraft = $state('sail');
   let tldError = $state<string | null>(null);
 
@@ -500,8 +501,9 @@
             <div class="copy">
               <div class="title">Enable local <code>.{tldDraft || 'sail'}</code> URLs</div>
               <div class="desc">
-                Turning this on prompts for your macOS admin password — needed once to install
-                the resolver file. You can change this any time in Settings.
+                Turning this on prompts once for a macOS admin password to install the resolver
+                file (you'll need an administrator account). If you skip it, projects still open at
+                <code>localhost:&lt;port&gt;</code>. Change this any time in Settings.
               </div>
             </div>
             <button

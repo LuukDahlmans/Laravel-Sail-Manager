@@ -41,7 +41,17 @@ pub async fn import_existing(store: &ProjectStore, path: PathBuf) -> AppResult<P
                 path.display()
             ))
         })?;
-    let _ = compose_file; // Existence-only check.
+
+    // The compose file is authored by whoever created this folder — importing
+    // then Starting runs it against the Docker daemon. Refuse host-escape
+    // directives before it can do damage.
+    let compose_text = tokio::fs::read_to_string(&compose_file)
+        .await
+        .map_err(|e| AppError::Other(format!("could not read compose file: {e}")))?;
+    let risks = crate::compose_audit::audit(&compose_text);
+    if !risks.is_empty() {
+        return Err(AppError::Other(crate::compose_audit::describe(&risks)));
+    }
 
     let env_path = path.join(".env");
     if !env_path.exists() {
@@ -106,10 +116,18 @@ pub async fn import_existing(store: &ProjectStore, path: PathBuf) -> AppResult<P
     let meilisearch_port = parse_opt("FORWARD_MEILISEARCH_PORT");
     let minio_port = parse_opt("FORWARD_MINIO_PORT");
 
-    // Build services list from which FORWARD_* keys are present.
+    // Build services list from which FORWARD_* keys are present. Infer the DB
+    // engine from DB_CONNECTION rather than assuming MySQL, so an imported
+    // Postgres/MariaDB/MongoDB project is tracked (and labeled) correctly.
     let mut services: Vec<ServiceKind> = Vec::new();
     if env.contains_key("FORWARD_DB_PORT") {
-        services.push(ServiceKind::Mysql);
+        let kind = match env.get("DB_CONNECTION").map(String::as_str) {
+            Some("pgsql") | Some("postgres") | Some("postgresql") => ServiceKind::Pgsql,
+            Some("mariadb") => ServiceKind::Mariadb,
+            Some("mongodb") => ServiceKind::Mongodb,
+            _ => ServiceKind::Mysql,
+        };
+        services.push(kind);
     }
     if env.contains_key("FORWARD_REDIS_PORT") {
         services.push(ServiceKind::Redis);
@@ -139,9 +157,15 @@ pub async fn import_existing(store: &ProjectStore, path: PathBuf) -> AppResult<P
         host: vite_port,
     });
     if let Some(p) = db_port {
+        let db_port_service = match env.get("DB_CONNECTION").map(String::as_str) {
+            Some("pgsql") | Some("postgres") | Some("postgresql") => PortService::Pgsql,
+            Some("mariadb") => PortService::Mariadb,
+            Some("mongodb") => PortService::Mongodb,
+            _ => PortService::Mysql,
+        };
         ports.push(Port {
-            service: PortService::Mysql,
-            label: PortService::Mysql.label().to_string(),
+            service: db_port_service,
+            label: db_port_service.label().to_string(),
             host: p,
         });
     }
@@ -315,7 +339,7 @@ pub async fn discover_orphans(
     Ok(out)
 }
 
-fn parse_env(contents: &str) -> HashMap<String, String> {
+pub(crate) fn parse_env(contents: &str) -> HashMap<String, String> {
     let mut out = HashMap::new();
     for raw in contents.lines() {
         let line = raw.trim();

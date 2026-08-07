@@ -26,6 +26,15 @@
   }: Props = $props();
 
   let busy = $state(false);
+  let modalEl = $state<HTMLElement | null>(null);
+  let cancelBtn = $state<HTMLButtonElement | null>(null);
+
+  // Focus the SAFE (Cancel) control when the dialog opens: Escape/Tab work
+  // immediately, and a reflexive Enter lands on Cancel rather than confirming a
+  // destructive action. (The old code bound Enter to confirm globally.)
+  $effect(() => {
+    if (open && cancelBtn) cancelBtn.focus();
+  });
 
   async function handleConfirm() {
     if (busy) return;
@@ -43,15 +52,35 @@
   }
 
   function onKey(e: KeyboardEvent) {
-    if (e.key === 'Escape') handleCancel();
-    if (e.key === 'Enter') handleConfirm();
+    if (e.key === 'Escape') {
+      handleCancel();
+      return;
+    }
+    // Trap focus inside the dialog so Tab can't reach the obscured background.
+    if (e.key === 'Tab' && modalEl) {
+      const focusable = Array.from(
+        modalEl.querySelectorAll<HTMLElement>(
+          'button:not([disabled]), [href], input, select, textarea, [tabindex]:not([tabindex="-1"])',
+        ),
+      );
+      if (focusable.length === 0) return;
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (e.shiftKey && document.activeElement === first) {
+        e.preventDefault();
+        last.focus();
+      } else if (!e.shiftKey && document.activeElement === last) {
+        e.preventDefault();
+        first.focus();
+      }
+    }
   }
 </script>
 
 {#if open}
   <div class="backdrop" onclick={handleCancel} role="presentation"></div>
 
-  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="confirm-title" tabindex="-1" onkeydown={onKey}>
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="confirm-title" tabindex="-1" onkeydown={onKey} bind:this={modalEl}>
     <header>
       <h2 id="confirm-title">{title}</h2>
       <button class="btn btn-ghost btn-icon" onclick={handleCancel} aria-label="Close" disabled={busy}>
@@ -67,7 +96,7 @@
     </div>
 
     <footer>
-      <button type="button" class="btn btn-ghost" onclick={handleCancel} disabled={busy}>{cancelLabel}</button>
+      <button type="button" class="btn btn-ghost" onclick={handleCancel} disabled={busy} bind:this={cancelBtn}>{cancelLabel}</button>
       <button
         type="button"
         class="btn"

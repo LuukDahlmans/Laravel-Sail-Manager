@@ -183,7 +183,7 @@ input:focus, select:focus, textarea:focus {
   white-space: nowrap;
 }
 
-.btn:hover {
+.btn:hover:not(:disabled) {
   background: var(--bg-4);
 }
 
@@ -198,7 +198,7 @@ input:focus, select:focus, textarea:focus {
   box-shadow: 0 1px 0 rgba(0, 0, 0, 0.12), inset 0 1px 0 rgba(255, 255, 255, 0.12);
 }
 
-.btn-primary:hover {
+.btn-primary:hover:not(:disabled) {
   background: var(--accent-hover);
   box-shadow: 0 2px 6px var(--accent-soft), 0 1px 0 rgba(0, 0, 0, 0.12),
     inset 0 1px 0 rgba(255, 255, 255, 0.12);
@@ -226,7 +226,7 @@ input:focus, select:focus, textarea:focus {
   color: var(--error);
 }
 
-.btn-danger:hover {
+.btn-danger:hover:not(:disabled) {
   background: var(--error-soft);
   border-color: var(--error);
 }
@@ -234,4 +234,18 @@ input:focus, select:focus, textarea:focus {
 .btn:disabled {
   opacity: 0.5;
   cursor: not-allowed;
+}
+
+/* Respect the OS "reduce motion" setting: drop the continuous animations
+   (spinners, pulses, the docker-status blink, welcome bobbing) and shorten
+   transitions for motion-sensitive users. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
 }

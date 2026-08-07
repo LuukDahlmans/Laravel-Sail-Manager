@@ -54,12 +54,9 @@ pub struct SettingsStore {
 
 impl SettingsStore {
     pub fn open(path: PathBuf) -> AppResult<Self> {
-        let inner = if path.exists() {
-            let raw = std::fs::read_to_string(&path)?;
-            serde_json::from_str(&raw).unwrap_or_default()
-        } else {
-            Settings::default()
-        };
+        // A corrupt settings.json is quarantined (not silently discarded) and
+        // we fall back to defaults — see persist::load_json.
+        let inner = crate::persist::load_json::<Settings>(&path).unwrap_or_default();
         Ok(Self {
             path,
             inner: Mutex::new(inner),
@@ -67,16 +64,15 @@ impl SettingsStore {
     }
 
     pub fn snapshot(&self) -> Settings {
-        self.inner.lock().expect("poisoned").clone()
+        // Recover a poisoned lock rather than panicking: a single panic while
+        // some other thread held the lock must not brick every settings read.
+        self.inner.lock().unwrap_or_else(|e| e.into_inner()).clone()
     }
 
     pub fn replace(&self, new: Settings) -> AppResult<()> {
-        if let Some(parent) = self.path.parent() {
-            std::fs::create_dir_all(parent)?;
-        }
         let json = serde_json::to_string_pretty(&new)?;
-        std::fs::write(&self.path, json)?;
-        *self.inner.lock().expect("poisoned") = new;
+        crate::persist::write_atomic(&self.path, &json)?;
+        *self.inner.lock().unwrap_or_else(|e| e.into_inner()) = new;
         Ok(())
     }
 

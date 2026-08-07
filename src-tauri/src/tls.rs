@@ -2,12 +2,26 @@ use std::path::{Path, PathBuf};
 
 use rcgen::{
     BasicConstraints, CertificateParams, DistinguishedName, DnType, ExtendedKeyUsagePurpose,
-    Ia5String, IsCa, KeyPair, KeyUsagePurpose, SanType,
+    GeneralSubtree, Ia5String, IsCa, KeyPair, KeyUsagePurpose, NameConstraints, SanType,
 };
 use time::{Duration, OffsetDateTime};
 use tokio::process::Command;
 
 use crate::error::{AppError, AppResult};
+
+/// Write a private key to disk with `0600` permissions so no other user (or a
+/// process running as a different user) can read it. The CA key in particular
+/// can mint browser-trusted certs for any name the CA permits, so it must not
+/// sit world/group-readable even under a user-only home dir.
+async fn write_private_key(path: &Path, pem: &str) -> AppResult<()> {
+    tokio::fs::write(path, pem).await?;
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        tokio::fs::set_permissions(path, std::fs::Permissions::from_mode(0o600)).await?;
+    }
+    Ok(())
+}
 
 /// CA + per-TLD wildcard cert directory. Sits under the app data dir so it
 /// follows the user's profile and survives upgrades.
@@ -30,19 +44,44 @@ pub fn wildcard_key_path(tls_dir: &Path, tld: &str) -> PathBuf {
 
 const CA_COMMON_NAME: &str = "Sail Manager Local CA";
 
-/// Generate `ca.pem` + `ca-key.pem` if they don't already exist. Idempotent —
-/// won't regenerate if both files are present.
-pub async fn ensure_ca(tls_dir: &Path) -> AppResult<()> {
-    ensure_ca_inner(tls_dir, false).await
+/// Generate `ca.pem` + `ca-key.pem` if they don't already exist, OR if the
+/// existing CA isn't name-constrained to `tld`. Idempotent otherwise. `tld`
+/// scopes the CA's X.509 name constraints — see `ensure_ca_inner`.
+pub async fn ensure_ca(tls_dir: &Path, tld: &str) -> AppResult<()> {
+    // Regenerate if the on-disk CA doesn't already permit this TLD (e.g. the
+    // user changed their local TLD). A CA constrained to the old TLD would
+    // sign certs the browser then rejects, so a stale constraint must not
+    // silently persist.
+    let force = ca_cert_path(tls_dir).exists() && !ca_permits_tld(tls_dir, tld).await;
+    ensure_ca_inner(tls_dir, tld, force).await
 }
 
 /// Always regenerate the CA, even if it exists. Used by the explicit toggle
 /// path so an old CA with broken dates / metadata gets replaced.
-pub async fn force_regen_ca(tls_dir: &Path) -> AppResult<()> {
-    ensure_ca_inner(tls_dir, true).await
+pub async fn force_regen_ca(tls_dir: &Path, tld: &str) -> AppResult<()> {
+    ensure_ca_inner(tls_dir, tld, true).await
 }
 
-async fn ensure_ca_inner(tls_dir: &Path, force: bool) -> AppResult<()> {
+/// True when the CA on disk carries a permitted-DNS name constraint covering
+/// `tld`. Returns false if the CA is missing, unparseable, or unconstrained —
+/// all cases where we'd want to (re)issue a properly-scoped CA.
+async fn ca_permits_tld(tls_dir: &Path, tld: &str) -> bool {
+    let Ok(pem) = tokio::fs::read_to_string(ca_cert_path(tls_dir)).await else {
+        return false;
+    };
+    let Ok(params) = CertificateParams::from_ca_cert_pem(&pem) else {
+        return false;
+    };
+    match &params.name_constraints {
+        Some(nc) => nc
+            .permitted_subtrees
+            .iter()
+            .any(|s| matches!(s, GeneralSubtree::DnsName(d) if d == tld)),
+        None => false,
+    }
+}
+
+async fn ensure_ca_inner(tls_dir: &Path, tld: &str, force: bool) -> AppResult<()> {
     tokio::fs::create_dir_all(tls_dir).await?;
     let cert_path = ca_cert_path(tls_dir);
     let key_path = ca_key_path(tls_dir);
@@ -61,12 +100,25 @@ async fn ensure_ca_inner(tls_dir: &Path, force: bool) -> AppResult<()> {
     dn.push(DnType::CommonName, CA_COMMON_NAME);
     dn.push(DnType::OrganizationName, "Sail Manager");
     params.distinguished_name = dn;
-    params.is_ca = IsCa::Ca(BasicConstraints::Unconstrained);
+    // Path-len 0: this CA can only sign leaf certs, never intermediate CAs.
+    params.is_ca = IsCa::Ca(BasicConstraints::Constrained(0));
     params.key_usages = vec![
         KeyUsagePurpose::KeyCertSign,
         KeyUsagePurpose::CrlSign,
         KeyUsagePurpose::DigitalSignature,
     ];
+    // Name-constrain the CA to the local TLD (+ localhost). Apple's and
+    // Chrome's verifiers honor permitted-DNS constraints, so even if
+    // `ca-key.pem` leaks, the key cannot mint a cert for `google.com` or any
+    // real domain — only `*.<tld>` and `localhost`. This is the difference
+    // between "a local dev convenience" and "a universal MITM key on disk".
+    params.name_constraints = Some(NameConstraints {
+        permitted_subtrees: vec![
+            GeneralSubtree::DnsName(tld.to_string()),
+            GeneralSubtree::DnsName("localhost".to_string()),
+        ],
+        excluded_subtrees: vec![],
+    });
 
     let key_pair =
         KeyPair::generate().map_err(|e| AppError::Other(format!("generate CA key: {e}")))?;
@@ -75,9 +127,7 @@ async fn ensure_ca_inner(tls_dir: &Path, force: bool) -> AppResult<()> {
         .map_err(|e| AppError::Other(format!("self-sign CA: {e}")))?;
 
     tokio::fs::write(&cert_path, cert.pem()).await?;
-    // 0600 on the key would be ideal but std::fs::Permissions on tokio is
-    // awkward; the tls_dir lives under ~/Library which is already user-only.
-    tokio::fs::write(&key_path, key_pair.serialize_pem()).await?;
+    write_private_key(&key_path, &key_pair.serialize_pem()).await?;
     Ok(())
 }
 
@@ -109,7 +159,7 @@ async fn ensure_wildcard_cert_inner(
     extra_hosts: &[String],
     force: bool,
 ) -> AppResult<()> {
-    ensure_ca(tls_dir).await?;
+    ensure_ca(tls_dir, tld).await?;
     let cert_path = wildcard_cert_path(tls_dir, tld);
     let key_path = wildcard_key_path(tls_dir, tld);
 
@@ -229,7 +279,7 @@ async fn ensure_wildcard_cert_inner(
         .map_err(|e| AppError::Other(format!("sign cert: {e}")))?;
 
     tokio::fs::write(&cert_path, cert.pem()).await?;
-    tokio::fs::write(&key_path, key_pair.serialize_pem()).await?;
+    write_private_key(&key_path, &key_pair.serialize_pem()).await?;
     Ok(())
 }
 

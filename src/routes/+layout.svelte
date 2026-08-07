@@ -92,6 +92,12 @@
     const unlistenPromise = listen<{ path: string }>('tray-navigate', (e) => {
       goto(e.payload.path);
     });
+    // Backend emits this when re-wiring Local URLs after a project add/remove
+    // fails — surface it as a non-blocking warning so a broken .<tld> route
+    // isn't silent.
+    const localUrlsWarnPromise = listen<string>('local-urls-warning', (e) => {
+      toast.warning(e.payload, 'Local URLs');
+    });
     // Poll Docker status so the sidebar reflects real-time changes (user
     // pausing/quitting Docker Desktop, etc.).
     const dockerInterval = window.setInterval(() => {
@@ -110,10 +116,23 @@
     refreshStats();
     const statsInterval = window.setInterval(refreshStats, 8000);
 
+    // Re-check for updates periodically, not just at boot. The window can stay
+    // open for days, so without this a user would only ever see a new release
+    // after a manual restart. checkForUpdate is a no-op once an update is
+    // already pending, and fails silently offline.
+    const updateInterval = window.setInterval(
+      () => {
+        if (!projectStore.updateAvailable) projectStore.checkForUpdate();
+      },
+      6 * 60 * 60 * 1000,
+    );
+
     return () => {
       unlistenPromise.then((fn) => fn());
+      localUrlsWarnPromise.then((fn) => fn());
       window.clearInterval(dockerInterval);
       window.clearInterval(statsInterval);
+      window.clearInterval(updateInterval);
     };
   });
 

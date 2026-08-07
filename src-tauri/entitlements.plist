@@ -2,13 +2,17 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
+    <!-- Required by the WKWebview JavaScript engine. -->
     <key>com.apple.security.cs.allow-jit</key>
     <true/>
     <key>com.apple.security.cs.allow-unsigned-executable-memory</key>
     <true/>
-    <key>com.apple.security.cs.allow-dyld-environment-variables</key>
-    <true/>
-    <key>com.apple.security.cs.disable-library-validation</key>
-    <true/>
+    <!--
+      Dropped `allow-dyld-environment-variables` and `disable-library-validation`:
+      together they let the signed app load unsigned/third-party dylibs and honor
+      DYLD_* — a code-injection foothold into a process that prompts for admin and
+      holds a trusted local CA key. Neither is needed by a standard Tauri app. If a
+      future dependency genuinely requires one, re-add only that one.
+    -->
 </dict>
 </plist>
