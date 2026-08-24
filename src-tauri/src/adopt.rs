@@ -423,11 +423,7 @@ fn split_interpolation(value: &str) -> Option<(String, &str)> {
     let rest = value.strip_prefix("${")?;
     let close = rest.find('}')?;
     let key = rest[..close].split(":-").next()?.trim();
-    if key.is_empty()
-        || !key
-            .bytes()
-            .all(|b| b.is_ascii_alphanumeric() || b == b'_')
-    {
+    if key.is_empty() || !key.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'_') {
         return None;
     }
     Some((key.to_string(), &rest[close + 1..]))
@@ -669,9 +665,8 @@ mod tests {
 
     #[test]
     fn parses_multiple_distinct_ports() {
-        let m = parse_published(
-            "0.0.0.0:1025->1025/tcp, [::]:1025->1025/tcp, 0.0.0.0:8025->8025/tcp",
-        );
+        let m =
+            parse_published("0.0.0.0:1025->1025/tcp, [::]:1025->1025/tcp, 0.0.0.0:8025->8025/tcp");
         assert_eq!(m.get(&1025), Some(&1025));
         assert_eq!(m.get(&8025), Some(&8025));
     }
@@ -689,8 +684,14 @@ mod tests {
 
     #[test]
     fn reads_php_version_from_sail_image_tag() {
-        assert_eq!(php_version_from_image("sail-8.4/app").as_deref(), Some("8.4"));
-        assert_eq!(php_version_from_image("sail-8.5/app").as_deref(), Some("8.5"));
+        assert_eq!(
+            php_version_from_image("sail-8.4/app").as_deref(),
+            Some("8.4")
+        );
+        assert_eq!(
+            php_version_from_image("sail-8.5/app").as_deref(),
+            Some("8.5")
+        );
     }
 
     #[test]
@@ -702,7 +703,10 @@ mod tests {
 
     #[test]
     fn recognizes_sail_stack_by_service_name() {
-        let rows = vec![row("redis", "redis:alpine"), row("laravel.test", "custom/app")];
+        let rows = vec![
+            row("redis", "redis:alpine"),
+            row("laravel.test", "custom/app"),
+        ];
         assert!(is_sail_stack(&rows));
     }
 
@@ -733,7 +737,10 @@ mod tests {
     fn a_stopped_sail_stack_is_still_a_sail_stack() {
         // `docker ps -a` is what feeds this, so every row can be exited — the
         // signature is the service name and image, never the state.
-        let rows = vec![row("laravel.test", "sail-8.4/app"), row("mysql", "mysql:8.4")];
+        let rows = vec![
+            row("laravel.test", "sail-8.4/app"),
+            row("mysql", "mysql:8.4"),
+        ];
         assert!(rows.iter().all(|r| r.state == "exited"));
         assert!(is_sail_stack(&rows));
     }
@@ -742,13 +749,19 @@ mod tests {
     fn sail_worker_containers_alone_identify_the_stack() {
         // Queue workers and schedulers run the same app image under different
         // service names; a stack whose web container was removed is still Sail.
-        let rows = vec![row("worker", "sail-8.5/app"), row("scheduler", "sail-8.5/app")];
+        let rows = vec![
+            row("worker", "sail-8.5/app"),
+            row("scheduler", "sail-8.5/app"),
+        ];
         assert!(is_sail_stack(&rows));
     }
 
     #[test]
     fn maps_env_keys_to_their_port_service() {
-        assert_eq!(port_service_for_env_key("APP_PORT", None), Some(PortService::App));
+        assert_eq!(
+            port_service_for_env_key("APP_PORT", None),
+            Some(PortService::App)
+        );
         assert_eq!(
             port_service_for_env_key("FORWARD_MAILPIT_DASHBOARD_PORT", None),
             Some(PortService::MailpitUi)
@@ -863,7 +876,10 @@ volumes:
         let keys = parse_port_env_keys(SAIL_COMPOSE);
         assert_eq!(
             keys.get("laravel.test").unwrap(),
-            &vec![("APP_PORT".to_string(), 80), ("VITE_PORT".to_string(), 5173)]
+            &vec![
+                ("APP_PORT".to_string(), 80),
+                ("VITE_PORT".to_string(), 5173)
+            ]
         );
         assert_eq!(
             keys.get("pgsql").unwrap(),
@@ -896,7 +912,9 @@ volumes:
 
     #[test]
     fn compose_with_no_services_yields_nothing() {
-        assert!(parse_port_env_keys("volumes:\n    sail-mysql:\n        driver: local\n").is_empty());
+        assert!(
+            parse_port_env_keys("volumes:\n    sail-mysql:\n        driver: local\n").is_empty()
+        );
     }
 
     #[test]
@@ -907,5 +925,3 @@ volumes:
         assert!(keys.is_empty());
     }
 }
-
-

@@ -900,9 +900,11 @@ pub async fn adopt_sail_project(
     drop(guard);
     let outcome = outcome?;
 
-    let _ = state
-        .store
-        .add_history(&outcome.project.id, HistoryKind::Imported, Some("adopted from an existing Docker stack"));
+    let _ = state.store.add_history(
+        &outcome.project.id,
+        HistoryKind::Imported,
+        Some("adopted from an existing Docker stack"),
+    );
 
     // The containers are already up, so record that instead of the Stopped
     // default import_existing writes.
