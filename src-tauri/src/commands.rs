@@ -5,6 +5,7 @@ use serde::Serialize;
 use tauri::{AppHandle, Emitter, State};
 use uuid::Uuid;
 
+use crate::adopt;
 use crate::dependencies::{self, DependencyCheck};
 use crate::dnsmasq;
 use crate::error::{AppError, AppResult};
@@ -870,6 +871,63 @@ pub async fn discover_orphans(
 ) -> AppResult<Vec<import::OrphanCandidate>> {
     let projects_root = state.projects_root();
     import::discover_orphans(&state.store, &projects_root).await
+}
+
+/// Sail projects Docker knows about — running or stopped — that aren't tracked
+/// here. Typically started from the terminal with `./vendor/bin/sail up`
+/// before Sail Manager was installed. Their ports are invisible to the
+/// allocator until they're adopted, so the UI surfaces them in a banner.
+#[tauri::command]
+pub async fn discover_untracked_sail(
+    state: State<'_, AppState>,
+) -> AppResult<Vec<adopt::UntrackedSailProject>> {
+    adopt::discover_untracked(&state.store).await
+}
+
+/// Convert one untracked Sail project into a tracked project: resolve its
+/// ports into `.env`, register it, and record its real status so a stack
+/// that's already up shows as Running rather than Stopped.
+#[tauri::command]
+pub async fn adopt_sail_project(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    compose_project: String,
+) -> AppResult<adopt::AdoptOutcome> {
+    // Same lock as create_project / import_project: adoption allocates host
+    // ports and inserts, and that must not race a concurrent create.
+    let guard = state.create_lock.lock().await;
+    let outcome = adopt::adopt(&state.store, &compose_project).await;
+    drop(guard);
+    let outcome = outcome?;
+
+    let _ = state
+        .store
+        .add_history(&outcome.project.id, HistoryKind::Imported, Some("adopted from an existing Docker stack"));
+
+    // The containers are already up, so record that instead of the Stopped
+    // default import_existing writes.
+    let status = sail::current_status(&outcome.project).await;
+    let _ = state.store.update_status(&outcome.project.id, status);
+    emit_status(&app, &outcome.project.id, status);
+
+    let project = state.store.get(&outcome.project.id)?;
+    refresh_local_urls_silent(&app, state).await;
+
+    Ok(adopt::AdoptOutcome { project, ..outcome })
+}
+
+/// Remember that the user doesn't want the import banner to offer this
+/// Compose project again. Persisted so it stays dismissed across launches.
+#[tauri::command]
+pub async fn dismiss_sail_import(
+    state: State<'_, AppState>,
+    compose_project: String,
+) -> AppResult<Settings> {
+    state.settings.update(|s| {
+        if !s.dismissed_sail_imports.contains(&compose_project) {
+            s.dismissed_sail_imports.push(compose_project.clone());
+        }
+    })
 }
 
 #[tauri::command]

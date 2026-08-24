@@ -143,6 +143,54 @@ jobs:
           cargo test --all-targets
           cargo clippy --all-targets -- -D warnings
 
+      # `tauri signer generate` writes a .key file whose CONTENTS are already
+      # base64, and that string verbatim is what TAURI_SIGNING_PRIVATE_KEY
+      # wants. Two things reliably go wrong when setting the secret:
+      #   * running `base64 -i <keyfile>` first — wrapping an already-base64
+      #     file a second time. Tauri then decodes one layer, finds more base64
+      #     instead of a key, and dies with "Missing encoded key in secret key".
+      #   * a trailing newline from the paste, which fails base64 decoding with
+      #     "Invalid symbol 10, offset N" (10 is `\n`).
+      # Both land AFTER code-signing and notarization have already run, wasting
+      # the release. Normalize the value and verify it decodes to a real key
+      # here, so a bad paste fails in seconds instead of ten minutes.
+      - name: Normalize and verify updater signing key
+        env:
+          RAW_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+        run: |
+          set -euo pipefail
+          if [ -z "${RAW_KEY:-}" ]; then
+            echo "::error::TAURI_SIGNING_PRIVATE_KEY is not set"
+            exit 1
+          fi
+
+          # Decoded key text pasted instead of the .key file? Encode it once.
+          if printf '%s' "$RAW_KEY" | grep -q 'untrusted comment'; then
+            KEY=$(printf '%s' "$RAW_KEY" | base64 | tr -d '[:space:]')
+          else
+            KEY=$(printf '%s' "$RAW_KEY" | tr -d '[:space:]')
+          fi
+
+          is_key() { printf '%s' "$1" | base64 -d 2>/dev/null | head -c 17 | grep -q 'untrusted comment'; }
+
+          # Peel one layer if there's a second base64 wrapper underneath.
+          INNER=$(printf '%s' "$KEY" | base64 -d 2>/dev/null | tr -d '[:space:]' || true)
+          if [ -n "$INNER" ] && is_key "$INNER"; then
+            echo "Secret was double base64-encoded; using the inner value."
+            KEY="$INNER"
+          fi
+
+          if ! is_key "$KEY"; then
+            echo "::error::TAURI_SIGNING_PRIVATE_KEY does not decode to a minisign secret key. Set it to the exact contents of your .key file: pbcopy < ~/.tauri/<name>.key"
+            exit 1
+          fi
+
+          # Re-mask: GitHub only auto-masks the secret's exact original text, so
+          # the normalized value would otherwise be printable in the log.
+          echo "::add-mask::$KEY"
+          echo "TAURI_SIGNING_PRIVATE_KEY=$KEY" >> "$GITHUB_ENV"
+          echo "Updater signing key OK."
+
       - name: Build, sign, notarize, and publish
         uses: tauri-apps/tauri-action@v0
         env:
@@ -158,8 +206,10 @@ jobs:
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
           # Tauri updater signing: signs the .app.tar.gz update payload so
           # the running app verifies it before installing. Key was generated
-          # without a password, so TAURI_SIGNING_PRIVATE_KEY_PASSWORD is omitted.
-          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          # without a password, so TAURI_SIGNING_PRIVATE_KEY_PASSWORD is
+          # omitted. TAURI_SIGNING_PRIVATE_KEY is NOT set here on purpose —
+          # the normalize step above puts the cleaned value in GITHUB_ENV, and
+          # a step-level `env:` entry would shadow it with the raw secret again.
         with:
           tagName: ${{ steps.version.outputs.tag }}
           releaseName: ${{ steps.version.outputs.name }}

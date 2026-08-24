@@ -1,3 +1,4 @@
+mod adopt;
 mod commands;
 mod compose_audit;
 mod dependencies;
@@ -190,6 +191,9 @@ pub fn run() {
             commands::shell_resize,
             commands::stop_shell,
             commands::discover_orphans,
+            commands::discover_untracked_sail,
+            commands::adopt_sail_project,
+            commands::dismiss_sail_import,
             commands::get_all_running_stats,
             commands::get_docker_system_info,
         ])

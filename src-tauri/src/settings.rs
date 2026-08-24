@@ -26,6 +26,11 @@ pub struct Settings {
     /// generates a local CA and installs it into the user's login keychain).
     #[serde(default)]
     pub local_urls_https: bool,
+    /// Compose project names the user dismissed from the "not managed by Sail
+    /// Manager" import banner. Persisted so a project they deliberately keep
+    /// unmanaged doesn't nag on every launch.
+    #[serde(default)]
+    pub dismissed_sail_imports: Vec<String>,
 }
 
 fn default_theme() -> String {
@@ -43,6 +48,7 @@ impl Default for Settings {
             theme: default_theme(),
             projects_root: String::new(),
             local_urls_https: false,
+            dismissed_sail_imports: Vec::new(),
         }
     }
 }
@@ -165,6 +171,7 @@ mod tests {
             theme: "light".to_string(),
             projects_root: String::new(),
             local_urls_https: false,
+            dismissed_sail_imports: Vec::new(),
         };
         let json = serde_json::to_string(&s).expect("serializes");
         // camelCase across the wire, per the Rust/TS contract.

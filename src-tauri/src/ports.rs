@@ -13,7 +13,22 @@ impl PortAllocator {
     /// import path to resolve collisions one port at a time without rewriting
     /// the ports the user already has working.
     pub fn allocate_single(store: &ProjectStore, ps: PortService, taken: &[u16]) -> AppResult<u16> {
-        next_free(store, ps, taken)
+        next_free(store, base_for(ps), taken)
+    }
+
+    /// Find a free host port scanning up from an arbitrary base. Used when
+    /// adopting a project whose compose file publishes a port we have no
+    /// `PortService` for (Reverb, a custom service, …) — it still needs to be
+    /// pinned to something actually free rather than left on a default every
+    /// other project also uses.
+    pub fn allocate_from_base(store: &ProjectStore, base: u16, taken: &[u16]) -> AppResult<u16> {
+        next_free(store, base, taken)
+    }
+
+    /// True if `port` is unclaimed: not reserved by a tracked project, not
+    /// already handed out in this session, and bindable on both wildcards.
+    pub fn is_free(store: &ProjectStore, port: u16, taken: &[u16]) -> AppResult<bool> {
+        Ok(!taken.contains(&port) && !store.host_port_in_use(port)? && is_bindable(port))
     }
 
     pub fn allocate_for_services(
@@ -48,7 +63,7 @@ impl PortAllocator {
         let mut taken: Vec<u16> = Vec::new();
         let mut ports = Vec::with_capacity(needed.len());
         for ps in needed {
-            let host = next_free(store, ps, &taken)?;
+            let host = next_free(store, base_for(ps), &taken)?;
             taken.push(host);
             ports.push(Port {
                 service: ps,
@@ -82,8 +97,7 @@ fn base_for(ps: PortService) -> u16 {
     }
 }
 
-fn next_free(store: &ProjectStore, ps: PortService, taken: &[u16]) -> AppResult<u16> {
-    let base = base_for(ps);
+fn next_free(store: &ProjectStore, base: u16, taken: &[u16]) -> AppResult<u16> {
     for offset in 0..SCAN_RANGE {
         let Some(candidate) = base.checked_add(offset) else {
             break;
@@ -175,7 +189,7 @@ mod tests {
         // Pre-take the first three candidates (the in-session collision check
         // happens before any DB or socket probe).
         let taken = vec![base, base + 1, base + 2];
-        let chosen = next_free(&store, PortService::App, &taken).expect("port available");
+        let chosen = next_free(&store, base_for(PortService::App), &taken).expect("port available");
         assert!(
             chosen >= base + 3,
             "expected port >= {}, got {chosen}",
@@ -188,7 +202,7 @@ mod tests {
     fn next_free_returns_within_scan_range() {
         let store = scratch_store();
         let base = base_for(PortService::App);
-        let chosen = next_free(&store, PortService::App, &[]).expect("port available");
+        let chosen = next_free(&store, base_for(PortService::App), &[]).expect("port available");
         assert!(chosen >= base);
         assert!(chosen < base + SCAN_RANGE);
     }

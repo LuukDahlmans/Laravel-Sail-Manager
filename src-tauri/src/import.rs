@@ -10,7 +10,7 @@ use crate::models::{Port, PortService, Project, ProjectStatus, ServiceKind, Star
 use crate::ports::PortAllocator;
 use crate::store::ProjectStore;
 
-const COMPOSE_CANDIDATES: &[&str] = &[
+pub(crate) const COMPOSE_CANDIDATES: &[&str] = &[
     "compose.yaml",
     "compose.yml",
     "docker-compose.yml",
@@ -437,7 +437,7 @@ fn apply_env_updates(contents: &str, updates: &[(&'static str, String)]) -> Stri
     result
 }
 
-fn sanitize_name(input: &str) -> String {
+pub(crate) fn sanitize_name(input: &str) -> String {
     let lower = input.to_lowercase();
     let mut out = String::with_capacity(lower.len());
     let mut prev_dash = false;

@@ -18,6 +18,8 @@ import type {
   ContainerStat,
   GitStatus,
   OrphanCandidate,
+  UntrackedSailProject,
+  AdoptOutcome,
   ProjectStatsSummary,
   DockerSystemInfo,
   DependencyCheck,
@@ -113,6 +115,14 @@ class ProjectStore {
   liveStats = $state<Record<string, ProjectStatsSummary>>({});
   /** Daemon-wide stats — drives the system panel at the top of the list. */
   dockerSystem = $state<DockerSystemInfo | null>(null);
+  /**
+   * Sail stacks Docker knows about — running or stopped — that we don't track
+   * yet. Polled while the app is open so a project the user touches from the
+   * terminal shows up in the import banner without a relaunch.
+   */
+  untrackedSail = $state<UntrackedSailProject[]>([]);
+  /** Compose project currently being adopted, so the banner can show progress. */
+  adopting = $state<string | null>(null);
   /** App version, read from tauri.conf.json once at boot. Shown in the sidebar. */
   appVersion = $state<string | null>(null);
   /**
@@ -477,6 +487,55 @@ class ProjectStore {
     } catch (e) {
       this.error = String(e);
       throw e;
+    }
+  }
+
+  /**
+   * Untracked Sail stacks minus the ones the user dismissed. The banner
+   * renders straight off this.
+   */
+  pendingSailImports = $derived(
+    this.untrackedSail.filter(
+      (r) => !(this.settings?.dismissedSailImports ?? []).includes(r.composeProject),
+    ),
+  );
+
+  async refreshUntrackedSail() {
+    // Pointless (and slow — every docker call is time-boxed) while the daemon
+    // is down; keep the last known list rather than blanking the banner.
+    if (!this.envCheck?.dockerOk) return;
+    try {
+      this.untrackedSail = await invoke<UntrackedSailProject[]>('discover_untracked_sail');
+    } catch {
+      // Soft failure — discovery is advisory.
+    }
+  }
+
+  /**
+   * Register an untracked Sail stack as a project. The backend writes concrete
+   * ports into `.env` first, so a stock project that relied on compose
+   * defaults becomes importable.
+   */
+  async adoptSailProject(composeProject: string): Promise<AdoptOutcome> {
+    this.adopting = composeProject;
+    try {
+      const outcome = await invoke<AdoptOutcome>('adopt_sail_project', { composeProject });
+      this.projects = [outcome.project, ...this.projects];
+      this.untrackedSail = this.untrackedSail.filter((r) => r.composeProject !== composeProject);
+      return outcome;
+    } catch (e) {
+      this.error = String(e);
+      throw e;
+    } finally {
+      this.adopting = null;
+    }
+  }
+
+  async dismissSailImport(composeProject: string) {
+    try {
+      this.settings = await invoke<Settings>('dismiss_sail_import', { composeProject });
+    } catch (e) {
+      this.error = String(e);
     }
   }
 

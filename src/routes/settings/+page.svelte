@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { untrack } from 'svelte';
   import { projectStore } from '$lib/projects.svelte';
   import { goto } from '$app/navigation';
   import Icon from '$lib/components/Icon.svelte';
@@ -12,26 +13,52 @@
   let editorSaving = $state(false);
   let changingRoot = $state(false);
 
+  // The saved value, so the input can be edited freely and only the actual
+  // change gets committed (and so Escape can put the typed text back).
+  const savedRoot = $derived(projectStore.envCheck?.projectsRoot ?? '');
+  const rootDirty = $derived(projectsRoot.trim() !== savedRoot && projectsRoot.trim() !== '');
+
   // Change where NEW projects are scaffolded. Existing projects stay where
-  // they are — this only affects future create/clone destinations.
-  async function changeProjectsRoot() {
+  // they are — this only affects future create/clone destinations. The backend
+  // expands a leading `~`, creates the directory, and rejects `/`, so a typed
+  // path gets the same treatment as a picked one.
+  async function applyProjectsRoot(path: string) {
+    if (changingRoot) return;
+    changingRoot = true;
+    try {
+      await projectStore.setProjectsRoot(path);
+      projectsRoot = projectStore.envCheck?.projectsRoot ?? path;
+      toast.success('Projects root updated');
+    } catch (e) {
+      projectsRoot = savedRoot;
+      projectStore.reportError(String(e), 'Could not change projects root');
+    } finally {
+      changingRoot = false;
+    }
+  }
+
+  async function browseProjectsRoot() {
     if (changingRoot) return;
     try {
       const selected = await openDialog({
         directory: true,
         multiple: false,
         title: 'Choose where to keep new Laravel projects',
-        defaultPath: projectsRoot || undefined,
+        defaultPath: savedRoot || undefined,
       });
       if (typeof selected !== 'string' || selected.length === 0) return;
-      changingRoot = true;
-      await projectStore.setProjectsRoot(selected);
-      projectsRoot = projectStore.envCheck?.projectsRoot ?? selected;
-      toast.success('Projects root updated');
+      await applyProjectsRoot(selected);
     } catch (e) {
       projectStore.reportError(String(e), 'Could not change projects root');
-    } finally {
-      changingRoot = false;
+    }
+  }
+
+  function onRootKeydown(e: KeyboardEvent) {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      if (rootDirty) void applyProjectsRoot(projectsRoot.trim());
+    } else if (e.key === 'Escape') {
+      projectsRoot = savedRoot;
     }
   }
 
@@ -51,9 +78,13 @@
     }
   }
 
+  // Adopt the backend's value only while the field is untouched — the Docker
+  // poll refreshes envCheck every 5s and would otherwise wipe a half-typed path.
+  let rootFocused = $state(false);
   $effect(() => {
-    if (projectStore.envCheck?.projectsRoot) {
-      projectsRoot = projectStore.envCheck.projectsRoot;
+    const root = projectStore.envCheck?.projectsRoot;
+    if (root && !rootFocused && !untrack(() => rootDirty)) {
+      projectsRoot = root;
     }
   });
 
@@ -338,13 +369,36 @@
     <div class="field">
       <label for="projects-root">Projects root folder</label>
       <div class="root-row">
-        <input id="projects-root" type="text" value={projectsRoot} readonly />
-        <button class="btn" onclick={changeProjectsRoot} disabled={changingRoot}>
-          {changingRoot ? 'Changing…' : 'Change…'}
+        <input
+          id="projects-root"
+          type="text"
+          bind:value={projectsRoot}
+          onfocus={() => (rootFocused = true)}
+          onblur={() => (rootFocused = false)}
+          onkeydown={onRootKeydown}
+          disabled={changingRoot}
+          spellcheck="false"
+          autocomplete="off"
+          autocapitalize="off"
+          placeholder="~/SailProjects"
+        />
+        {#if rootDirty}
+          <button
+            class="btn btn-primary"
+            onclick={() => applyProjectsRoot(projectsRoot.trim())}
+            disabled={changingRoot}
+          >
+            {changingRoot ? 'Saving…' : 'Save'}
+          </button>
+        {/if}
+        <button class="btn" onclick={browseProjectsRoot} disabled={changingRoot}>
+          Browse…
         </button>
       </div>
       <p class="hint">
-        Where new Laravel projects are created. Existing projects aren't moved.
+        Where new Laravel projects are created. Existing projects aren't moved. Type a path
+        (<code>~</code> works) and press Enter, or browse for a folder — it's created if it
+        doesn't exist yet.
       </p>
     </div>
   </div>

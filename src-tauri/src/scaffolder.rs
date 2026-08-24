@@ -145,7 +145,7 @@ fn port_value(ports: &[Port], service: PortService) -> Option<u16> {
     ports.iter().find(|p| p.service == service).map(|p| p.host)
 }
 
-fn apply_env_overrides(original: &str, overrides: &[(&str, String)]) -> String {
+pub(crate) fn apply_env_overrides(original: &str, overrides: &[(&str, String)]) -> String {
     let mut applied = vec![false; overrides.len()];
     let mut out = String::with_capacity(original.len() + 256);
 

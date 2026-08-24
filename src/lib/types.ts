@@ -61,6 +61,7 @@ export interface Settings {
   theme: ThemeChoice;
   projectsRoot: string;
   localUrlsHttps: boolean;
+  dismissedSailImports: string[];
 }
 
 export type HistoryKind =
@@ -159,6 +160,27 @@ export interface OrphanCandidate {
   name: string;
   path: string;
   composeFile: string;
+}
+
+/** A Sail stack Docker knows about — running or stopped — that isn't tracked. */
+export interface UntrackedSailProject {
+  composeProject: string;
+  name: string;
+  path: string;
+  services: string[];
+  running: boolean;
+  appPort: number | null;
+  phpVersion: string | null;
+  importable: boolean;
+  blockedReason: string | null;
+}
+
+export interface AdoptOutcome {
+  project: Project;
+  /** .env keys we added because the project relied on compose defaults. */
+  pinnedKeys: string[];
+  /** Ports moved to dodge a conflict — the containers need a restart to match. */
+  needsRestart: boolean;
 }
 
 export interface ProjectStatsSummary {

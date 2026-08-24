@@ -10,6 +10,7 @@
   import CloneFromGitModal from '$lib/components/CloneFromGitModal.svelte';
   import Toaster from '$lib/components/Toaster.svelte';
   import SplashScreen from '$lib/components/SplashScreen.svelte';
+  import SailImportBanner from '$lib/components/SailImportBanner.svelte';
   import { projectStore } from '$lib/projects.svelte';
   import { toast } from '$lib/toast.svelte';
 
@@ -104,6 +105,14 @@
       projectStore.refreshEnvCheck();
     }, 5000);
 
+    // Look for Sail stacks Docker knows about that we don't. Slower than the
+    // Docker poll — it shells out to `docker ps -a` and the answer only
+    // changes when the user touches something from a terminal. The banner is a
+    // $derived off the result, so it appears and disappears on its own.
+    const untrackedSailInterval = window.setInterval(() => {
+      projectStore.refreshUntrackedSail();
+    }, 15000);
+
     // Poll daemon-wide docker stats (CPU / RAM / disk) so the sidebar can
     // show them at all times, regardless of route. The list page used to
     // own this; now layout owns it so the sidebar is always live.
@@ -131,6 +140,7 @@
       unlistenPromise.then((fn) => fn());
       localUrlsWarnPromise.then((fn) => fn());
       window.clearInterval(dockerInterval);
+      window.clearInterval(untrackedSailInterval);
       window.clearInterval(statsInterval);
       window.clearInterval(updateInterval);
     };
@@ -157,7 +167,14 @@
     orphanScanDone = true;
     void (async () => {
       try {
-        const orphans = await projectStore.discoverOrphans();
+        // Scan Docker first: a project that's untracked on disk AND known to
+        // Docker gets offered by the import banner, and it shouldn't also
+        // arrive as a toast.
+        await projectStore.refreshUntrackedSail();
+        const running = new Set(projectStore.pendingSailImports.map((r) => r.path));
+        const orphans = (await projectStore.discoverOrphans()).filter(
+          (o) => !running.has(o.path),
+        );
         if (orphans.length === 0) return;
         const noun = orphans.length === 1 ? 'project' : 'projects';
         toast.show({
@@ -217,10 +234,12 @@
 {:else}
 <div class="app">
   <Sidebar />
-  <main class="content">
+  <main class="content" class:with-banner={projectStore.pendingSailImports.length > 0}>
     {@render children?.()}
   </main>
 </div>
+
+<SailImportBanner />
 
 <CreateProjectModal />
 <ImportProjectModal />
@@ -246,6 +265,11 @@
     overflow-x: hidden;
     display: flex;
     flex-direction: column;
+  }
+  /* The banner is fixed to the bottom of the window, so scrollable content
+     needs matching room or its last row sits underneath. */
+  .content.with-banner {
+    padding-bottom: 56px;
   }
 
 </style>
